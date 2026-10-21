@@ -428,23 +428,23 @@ timeline
 
 ### D17-ZenUML-Sequence
 
-```mermaid
-zenuml
-    title Vault Checkout Process
-    @Actor User
-    @Boundary AppUI
-    @Control Router
-    @Entity VaultStore
+> [!NOTE]
+> ZenUML interaction processes are rendered using native Mermaid sequence syntax with activation lifelines and boundary roles for 100% Obsidian compatibility without external web plugins.
 
-    User->AppUI.openNote(noteId) {
-        AppUI->Router.dispatchRoute() {
-            Router->VaultStore.fetchMarkdown(noteId) {
-                return markdownContent
-            }
-            return renderedDocument
-        }
-        return displayView
-    }
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant AppUI as AppUI (Boundary)
+    participant Router as Router (Control)
+    participant VaultStore as VaultStore (Entity)
+
+    User->>+AppUI: openNote(noteId)
+    AppUI->>+Router: dispatchRoute()
+    Router->>+VaultStore: fetchMarkdown(noteId)
+    VaultStore-->>-Router: markdownContent
+    Router-->>-AppUI: renderedDocument
+    AppUI-->>-User: displayView
 ```
 
 [↑ Back to plan](#Master-Plan)

@@ -27,7 +27,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const { styleSvg, equalizeCardWidths, wrapDecisions, computeDiagramSpacing } = require('../src/layout');
+const { styleSvg, equalizeCardWidths, wrapDecisions, computeDiagramSpacing, fixClusterHeaderOverlap } = require('../src/layout');
 const { DEFAULT_SETTINGS } = require('../src/settings');
 const { resolvePaletteData } = require('../src/colors');
 Module._load = originalLoad;
@@ -203,5 +203,77 @@ describe('Alignment & Layout Precision Tests', () => {
     // Verify each label is spaced far apart (at least 50px between centers)
     assert.ok(xCoords[1]! - xCoords[0]! >= 50, `Distance between label 0 and 1 should be >= 50, got ${xCoords[1]! - xCoords[0]!}`);
     assert.ok(xCoords[2]! - xCoords[1]! >= 50, `Distance between label 1 and 2 should be >= 50, got ${xCoords[2]! - xCoords[1]!}`);
+  });
+
+  it('preserves state diagram transition paths and formats barbEnd arrow markers cleanly', () => {
+    const originalD = 'M100,50 C100,75 150,75 150,100';
+    const stateSvg = `<svg id="test-state" class="mermaid">
+      <defs>
+        <marker id="statediagram-barbEnd" class="marker statediagram" viewBox="0 0 20 14" refX="19" refY="7">
+          <path d="M 19,7 L9,13 L14,7 L9,1 Z" stroke-width="1.5"/>
+        </marker>
+      </defs>
+      <g class="edgePaths">
+        <g class="edgePath"><path class="path" d="${originalD}"/></g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(stateSvg, '', DEFAULT_SETTINGS, palette, false);
+    // Path d in state diagram is untouched by flowchart orthogonal router
+    assert.ok(enhanced.includes(`d="${originalD}"`), 'Curved transition path in state diagram should remain untouched');
+    // Marker is formatted with crisp triangle and stroke-width 0
+    assert.ok(enhanced.includes('d="M0 0 L10 5 L0 10 Z"'), 'Marker should be formatted into crisp triangle');
+    assert.ok(enhanced.includes('stroke-width="0"'), 'Marker path stroke-width should be 0');
+  });
+
+  it('resolves kanban column header overlaps by shifting cards down and expanding column rect', () => {
+    const kanbanSvg = `<svg id="test-kanban" class="mermaid" viewBox="0 0 400 300" height="300">
+      <g class="cluster" id="backlog">
+        <rect x="10" y="10" width="180" height="200"/>
+        <g class="cluster-label" transform="translate(100, 20)"><text>📋 Ready for Planning</text></g>
+      </g>
+      <g id="flowchart-task1-0" class="node default" transform="translate(100, 25)">
+        <rect width="160" height="40" x="-80" y="-20"/>
+        <g class="label"><text>Task 1 text</text></g>
+      </g>
+      <g id="flowchart-task2-1" class="node default" transform="translate(100, 75)">
+        <rect width="160" height="40" x="-80" y="-20"/>
+        <g class="label"><text>Task 2 text</text></g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(kanbanSvg, '', DEFAULT_SETTINGS, palette, false);
+    // Verify task 1 has been shifted down away from header (originally translate(100, 25))
+    const task1Match = enhanced.match(/id="flowchart-task1-0"[^>]*transform="translate\(\s*100\s*,\s*([-\d.]+)\s*\)/);
+    assert.ok(task1Match, 'Task 1 should have a translate transform');
+    const task1Y = parseFloat(task1Match[1]!);
+    assert.ok(task1Y >= 45, `Task 1 Y coordinate should be >= 45 to clear header, got ${task1Y}`);
+
+    // Verify cluster rect height is expanded (originally 200)
+    const rectMatch = enhanced.match(/<rect[^>]*width="180"[^>]*height="([-\d.]+)"/);
+    assert.ok(rectMatch, 'Cluster rect should have updated height');
+    const newHeight = parseFloat(rectMatch[1]!);
+    assert.ok(newHeight > 200, `Cluster height should be expanded beyond 200, got ${newHeight}`);
+  });
+
+  it('normalizes dark-mode C4 #444444 lines and timeline event text to high-contrast palette colors', () => {
+    const darkPalette = resolvePaletteData('multi', 'cool', 'slate', true);
+    const mixedSvg = `<svg id="test-contrast" class="mermaid">
+      <g class="c4">
+        <line class="relationshipLine" stroke="#444444" x1="0" y1="0" x2="100" y2="100"/>
+        <text class="relationshipLabel" fill="#444444">Relates To</text>
+      </g>
+      <g class="timeline-event">
+        <text fill="#000000">Timeline Event 2024</text>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(mixedSvg, '', DEFAULT_SETTINGS, darkPalette, true);
+    // #444444 stroke and fill are normalized to palette colors
+    assert.ok(!enhanced.includes('stroke="#444444"'), 'Hardcoded #444444 stroke should be replaced in dark mode');
+    assert.ok(!enhanced.includes('fill="#444444"'), 'Hardcoded #444444 text fill should be replaced in dark mode');
+    assert.ok(!enhanced.includes('fill="#000000"'), 'Black timeline text fill should be replaced in dark mode');
+    assert.ok(enhanced.includes(`stroke="${darkPalette.line}"`), 'Relationship line should use palette line color');
+    assert.ok(enhanced.includes(`fill="${darkPalette.text}"`), 'Text should use palette text color');
   });
 });

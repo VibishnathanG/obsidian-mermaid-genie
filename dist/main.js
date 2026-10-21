@@ -100,27 +100,34 @@ function resolvePaletteData(style, multiPalette, singlePalette, dark, customColo
   const basePreset = (dark ? DARK_SINGLE_PRESETS : LIGHT_SINGLE_PRESETS)[singlePalette] ?? (dark ? DARK_SINGLE_PRESETS.slate : LIGHT_SINGLE_PRESETS.slate);
   if (style === "multi") {
     const multi = MULTICOLOR_PALETTES[multiPalette]?.[dark ? "dark" : "light"] ?? MULTICOLOR_PALETTES.clear[dark ? "dark" : "light"];
+    const preferredText2 = customColors?.text ?? basePreset.text;
+    const textOnFills = multi.fills.map((f) => textOnFill(f, preferredText2));
     return {
       ...basePreset,
       surface: multi.fills[0],
       border: multi.borders[0],
       fills: multi.fills,
       borders: multi.borders,
+      textOnFills,
       ...customColors
     };
   }
   if (style === "custom" && customColors) {
     const merged = { ...basePreset, ...customColors };
+    const preferredText2 = merged.text;
     return {
       ...merged,
       fills: [merged.surface],
-      borders: [merged.border]
+      borders: [merged.border],
+      textOnFills: [textOnFill(merged.surface, preferredText2)]
     };
   }
+  const preferredText = customColors?.text ?? basePreset.text;
   return {
     ...basePreset,
     fills: [basePreset.surface],
     borders: [basePreset.border],
+    textOnFills: [textOnFill(basePreset.surface, preferredText)],
     ...customColors
   };
 }
@@ -1140,6 +1147,82 @@ function computeDiagramSpacing(text, direction = "TD") {
     rankSpacing: isVertical ? baseRank : baseNode
   };
 }
+function fixClusterHeaderOverlap(doc) {
+  const clusters = Array.from(doc.querySelectorAll("g.cluster, .kanban-column, .kanban-section"));
+  if (clusters.length === 0) return;
+  let maxAddedHeight = 0;
+  for (const cluster of clusters) {
+    const rect = cluster.querySelector(":scope > rect, rect");
+    if (!rect) continue;
+    const clusterY = parseFloat(rect.getAttribute("y") || "0");
+    const clusterX = parseFloat(rect.getAttribute("x") || "0");
+    const clusterWidth = parseFloat(rect.getAttribute("width") || "0");
+    const clusterHeight = parseFloat(rect.getAttribute("height") || "0");
+    if (clusterWidth <= 0 || clusterHeight <= 0) continue;
+    const label = cluster.querySelector(".cluster-label, .cluster-title, text");
+    if (!label) continue;
+    let labelBottomY = clusterY + 24;
+    const labelTransform = label.getAttribute("transform");
+    if (labelTransform) {
+      const match = labelTransform.match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (match && match[2] !== void 0) {
+        labelBottomY = parseFloat(match[2]) + 16;
+      }
+    } else {
+      const ly = parseFloat(label.getAttribute("y") || "0");
+      if (ly > 0) labelBottomY = ly + 16;
+    }
+    const allNodes = Array.from(doc.querySelectorAll("g.node, .kanban-item, .kanban-ticket, .task"));
+    const columnNodes = [];
+    for (const node of allNodes) {
+      const t = node.getAttribute("transform") || "";
+      const match = t.match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (!match) continue;
+      const nx = parseFloat(match[1]);
+      const ny = parseFloat(match[2]);
+      const isInside = nx >= clusterX - 5 && nx <= clusterX + clusterWidth + 5 || cluster.contains(node);
+      if (isInside && ny >= clusterY - 10 && ny <= clusterY + clusterHeight + 60) {
+        columnNodes.push({ node, x: nx, y: ny, rawTransform: t });
+      }
+    }
+    if (columnNodes.length === 0) continue;
+    columnNodes.sort((a, b) => a.y - b.y);
+    const firstNode = columnNodes[0];
+    const nodeCard = firstNode.node.querySelector("rect, polygon, circle");
+    const cardHeight = nodeCard ? parseFloat(nodeCard.getAttribute("height") || "40") : 40;
+    const cardTop = firstNode.y - cardHeight / 2;
+    const desiredCardTop = labelBottomY + 14;
+    if (cardTop < desiredCardTop) {
+      const shiftY = Math.ceil(desiredCardTop - cardTop);
+      if (shiftY > 0 && shiftY < 200) {
+        for (const item of columnNodes) {
+          const newY = item.y + shiftY;
+          const updatedTransform = item.rawTransform.replace(
+            /translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/,
+            `translate($1, ${newY})`
+          );
+          item.node.setAttribute("transform", updatedTransform);
+        }
+        rect.setAttribute("height", String(clusterHeight + shiftY));
+        if (shiftY > maxAddedHeight) {
+          maxAddedHeight = shiftY;
+        }
+      }
+    }
+  }
+  if (maxAddedHeight > 0) {
+    const root = doc.documentElement;
+    const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+    if (viewBox.length === 4 && viewBox.every(Number.isFinite)) {
+      const [vx, vy, vw, vh] = viewBox;
+      root.setAttribute("viewBox", `${vx} ${vy} ${vw} ${vh + maxAddedHeight}`);
+      const h = parseFloat(root.getAttribute("height") || "0");
+      if (h > 0) {
+        root.setAttribute("height", String(h + maxAddedHeight));
+      }
+    }
+  }
+}
 function styleSvg(svg, direction, settings, palette, dark) {
   const compactLayout = settings.compactLayout !== false;
   svg = svg.replace(/&nbsp;/g, "\xA0").replace(/<br\s*>/gi, "<br/>");
@@ -1278,70 +1361,73 @@ function styleSvg(svg, direction, settings, palette, dark) {
   if (compactLayout) {
     equalizeCardWidths(doc, direction);
   }
-  for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
-    const d = path.getAttribute("d") || "";
-    if (!d) continue;
-    const points = routePoints(d);
-    if (!points || points.length < 2) {
-      path.setAttribute("d", softenOrthogonalPath(d, 8));
-      continue;
-    }
-    const edge = resolveEdge(doc, path);
-    let routed = null;
-    if (compactLayout && direction && edge) {
-      const from = nodeBounds(doc, edge[1]);
-      const to = nodeBounds(doc, edge[2]);
-      if (from && to) {
-        const delta = to.center[axis2] - from.center[axis2];
-        if (Math.abs(delta) >= 0.01) {
-          const travelSign = Math.sign(delta);
-          const pathOffset = transformOffset(path);
-          if (pathOffset) {
-            points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
-            points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
-            const forward = sign * delta > 0;
-            if (forward) {
-              const sourceLimit = nodeLimit(doc, edge[1], direction, true) - pathOffset[axis2];
-              const targetLimit = nodeLimit(doc, edge[2], direction, false) - pathOffset[axis2];
-              routed = orthogonalPath(
-                points,
-                direction,
-                sourceLimit,
-                targetLimit,
-                branchLevels.has(edge[1]) ? branchLevels.get(edge[1]) - pathOffset[axis2] : void 0
-              );
-            } else {
-              routed = returnLanePath(points, direction, from, to, pathOffset);
+  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
+  if (isFlowchart) {
+    for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
+      const d = path.getAttribute("d") || "";
+      if (!d) continue;
+      const points = routePoints(d);
+      if (!points || points.length < 2) {
+        path.setAttribute("d", softenOrthogonalPath(d, 8));
+        continue;
+      }
+      const edge = resolveEdge(doc, path);
+      let routed = null;
+      if (compactLayout && direction && edge) {
+        const from = nodeBounds(doc, edge[1]);
+        const to = nodeBounds(doc, edge[2]);
+        if (from && to) {
+          const delta = to.center[axis2] - from.center[axis2];
+          if (Math.abs(delta) >= 0.01) {
+            const travelSign = Math.sign(delta);
+            const pathOffset = transformOffset(path);
+            if (pathOffset) {
+              points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
+              points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
+              const forward = sign * delta > 0;
+              if (forward) {
+                const sourceLimit = nodeLimit(doc, edge[1], direction, true) - pathOffset[axis2];
+                const targetLimit = nodeLimit(doc, edge[2], direction, false) - pathOffset[axis2];
+                routed = orthogonalPath(
+                  points,
+                  direction,
+                  sourceLimit,
+                  targetLimit,
+                  branchLevels.has(edge[1]) ? branchLevels.get(edge[1]) - pathOffset[axis2] : void 0
+                );
+              } else {
+                routed = returnLanePath(points, direction, from, to, pathOffset);
+              }
             }
           }
         }
       }
-    }
-    if (routed) {
-      const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
-      const a = route.length > 2 ? route[1] : route[0];
-      const b = route.length > 2 ? route[2] : route[1];
-      const offset = transformOffset(path) || [0, 0];
-      if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
-        const edgeId = path.getAttribute("data-id") || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : "");
-        const fallbackPos = [
-          (a[0] + b[0]) / 2 + offset[0],
-          (a[1] + b[1]) / 2 + offset[1]
-        ];
-        if (edgeId && !labelPositions.has(edgeId)) {
-          labelPositions.set(edgeId, fallbackPos);
+      if (routed) {
+        const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
+        const a = route.length > 2 ? route[1] : route[0];
+        const b = route.length > 2 ? route[2] : route[1];
+        const offset = transformOffset(path) || [0, 0];
+        if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
+          const edgeId = path.getAttribute("data-id") || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : "");
+          const fallbackPos = [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1]
+          ];
+          if (edgeId && !labelPositions.has(edgeId)) {
+            labelPositions.set(edgeId, fallbackPos);
+          }
+          if (edge) {
+            const lKey = `L_${edge[1]}_${edge[2]}_`;
+            const hKey = `L-${edge[1]}-${edge[2]}-`;
+            if (!labelPositions.has(lKey)) labelPositions.set(lKey, fallbackPos);
+            if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
+          }
         }
-        if (edge) {
-          const lKey = `L_${edge[1]}_${edge[2]}_`;
-          const hKey = `L-${edge[1]}-${edge[2]}-`;
-          if (!labelPositions.has(lKey)) labelPositions.set(lKey, fallbackPos);
-          if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
-        }
+        routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
+        path.setAttribute("d", roundPath(routed, 8));
+      } else {
+        path.setAttribute("d", roundPath(d, 8));
       }
-      routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
-      path.setAttribute("d", roundPath(routed, 8));
-    } else {
-      path.setAttribute("d", roundPath(d, 8));
     }
   }
   const placedLabels = [];
@@ -1397,19 +1483,20 @@ function styleSvg(svg, direction, settings, palette, dark) {
       `translate(${item.x - offset[0]},${item.y - offset[1]})`
     );
   }
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
     marker.setAttribute("markerUnits", "userSpaceOnUse");
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
     marker.setAttribute("viewBox", "0 0 10 10");
     marker.setAttribute("refY", "5");
     marker.setAttribute("orient", "auto");
-    const start = marker.id.endsWith("pointStart");
+    const start = marker.id.endsWith("pointStart") || marker.id.includes("barbStart");
     marker.setAttribute("refX", start ? "0" : "10");
     const path = marker.querySelector("path");
     if (path) {
       path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
       path.setAttribute("stroke-width", "0");
+      path.setAttribute("fill", palette.line);
     }
   }
   for (const node of doc.querySelectorAll("g.node")) {
@@ -1463,6 +1550,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
   if (edgeLabelsGroup && edgeLabelsGroup.parentElement) {
     edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
+  fixClusterHeaderOverlap(doc);
   const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
     const [x, y, width, height] = viewBox;
@@ -1490,19 +1578,20 @@ function styleSvg(svg, direction, settings, palette, dark) {
     path.setAttribute("data-mpe-to", edge[2]);
     path.setAttribute("data-mpe-forward", String(sign * (position(to) - position(from)) > 0));
   }
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
     marker.setAttribute("markerUnits", "userSpaceOnUse");
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
     marker.setAttribute("viewBox", "0 0 10 10");
     marker.setAttribute("refY", "5");
     marker.setAttribute("orient", "auto");
-    const start = marker.id.endsWith("pointStart");
+    const start = marker.id.endsWith("pointStart") || marker.id.includes("barbStart");
     marker.setAttribute("refX", start ? "0" : "10");
     const path = marker.querySelector("path");
     if (path) {
       path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
       path.setAttribute("stroke-width", "0");
+      path.setAttribute("fill", palette.line);
     }
   }
   if (settings.nodeRadius > 0) {
@@ -1512,6 +1601,20 @@ function styleSvg(svg, direction, settings, palette, dark) {
     }
   }
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
+  if (dark) {
+    for (const el of doc.querySelectorAll('[stroke="#444444"], [stroke="#444"], [stroke="#333333"]')) {
+      el.setAttribute("stroke", palette.line);
+    }
+    for (const el of doc.querySelectorAll('[fill="#444444"], [fill="#444"], [fill="#333333"]')) {
+      el.setAttribute("fill", palette.text);
+    }
+    for (const text of doc.querySelectorAll('g[class*="timeline"] text, g[class*="event"] text, .event text, .timeline-event text')) {
+      const fill = (text.getAttribute("fill") || "").toLowerCase();
+      if (!fill || fill === "#000000" || fill === "#000" || fill === "black" || fill === "#111111") {
+        text.setAttribute("fill", palette.text);
+      }
+    }
+  }
   root.classList?.add?.("mfe-enhanced", "mermaid-genie-diagram");
   if (root.style?.setProperty) {
     root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
@@ -1890,16 +1993,69 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           gitBranchLabel0: palette.text,
           tagLabelBackground: palette.label,
           tagLabelBorder: palette.border,
-          // Timelines
+          // Timelines (12-slot color wheel with WCAG AA verified label and text contrast)
           ...palette.fills.length >= 6 ? {
             cScale0: palette.fills[0],
             cScale1: palette.fills[1],
             cScale2: palette.fills[2],
             cScale3: palette.fills[3],
             cScale4: palette.fills[4],
-            cScale5: palette.fills[5]
-          } : {},
-          cScaleLabel0: palette.text,
+            cScale5: palette.fills[5],
+            cScale6: palette.fills[0],
+            cScale7: palette.fills[1],
+            cScale8: palette.fills[2],
+            cScale9: palette.fills[3],
+            cScale10: palette.fills[4],
+            cScale11: palette.fills[5],
+            cScaleLabel0: palette.textOnFills[0] ?? palette.text,
+            cScaleLabel1: palette.textOnFills[1] ?? palette.text,
+            cScaleLabel2: palette.textOnFills[2] ?? palette.text,
+            cScaleLabel3: palette.textOnFills[3] ?? palette.text,
+            cScaleLabel4: palette.textOnFills[4] ?? palette.text,
+            cScaleLabel5: palette.textOnFills[5] ?? palette.text,
+            cScaleLabel6: palette.textOnFills[0] ?? palette.text,
+            cScaleLabel7: palette.textOnFills[1] ?? palette.text,
+            cScaleLabel8: palette.textOnFills[2] ?? palette.text,
+            cScaleLabel9: palette.textOnFills[3] ?? palette.text,
+            cScaleLabel10: palette.textOnFills[4] ?? palette.text,
+            cScaleLabel11: palette.textOnFills[5] ?? palette.text,
+            cScaleColor0: palette.textOnFills[0] ?? palette.text,
+            cScaleColor1: palette.textOnFills[1] ?? palette.text,
+            cScaleColor2: palette.textOnFills[2] ?? palette.text,
+            cScaleColor3: palette.textOnFills[3] ?? palette.text,
+            cScaleColor4: palette.textOnFills[4] ?? palette.text,
+            cScaleColor5: palette.textOnFills[5] ?? palette.text,
+            cScaleColor6: palette.textOnFills[0] ?? palette.text,
+            cScaleColor7: palette.textOnFills[1] ?? palette.text,
+            cScaleColor8: palette.textOnFills[2] ?? palette.text,
+            cScaleColor9: palette.textOnFills[3] ?? palette.text,
+            cScaleColor10: palette.textOnFills[4] ?? palette.text,
+            cScaleColor11: palette.textOnFills[5] ?? palette.text
+          } : {
+            cScaleLabel0: palette.text,
+            cScaleColor0: palette.text
+          },
+          timelineTitleColor: palette.text,
+          timelineSectionTitleColor: palette.text,
+          timelineBorderColor: palette.border,
+          timelineLineColor: palette.line,
+          // C4 Architecture diagrams
+          c4ShapeColor: palette.surface,
+          c4ShapeBorderColor: palette.border,
+          c4BoundaryColor: palette.border,
+          c4BoundaryBorderColor: palette.border,
+          personBkgColor: palette.surface,
+          personBorderColor: palette.border,
+          personTextColor: palette.text,
+          systemBkgColor: palette.surface,
+          systemBorderColor: palette.border,
+          systemTextColor: palette.text,
+          systemExtBkgColor: palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"),
+          systemExtBorderColor: palette.border,
+          systemExtTextColor: palette.text,
+          relationshipTextColor: palette.text,
+          relColor: palette.line,
+          relTextColor: palette.text,
           // User Journeys
           ...palette.fills.length >= 6 ? {
             fillType0: palette.fills[0],

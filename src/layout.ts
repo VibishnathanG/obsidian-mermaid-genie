@@ -391,6 +391,104 @@ export function computeDiagramSpacing(text: string, direction: string = 'TD'): {
   };
 }
 
+/**
+ * Detects and resolves vertical overlaps between cluster/kanban headers and their first child cards.
+ * When Mermaid renders Kanban columns or subgraphs with tight top margins, cards can overlap the title.
+ * This shifts cards down to provide clean clearance and expands the cluster rect height.
+ */
+export function fixClusterHeaderOverlap(doc: Document): void {
+  const clusters = Array.from(doc.querySelectorAll('g.cluster, .kanban-column, .kanban-section'));
+  if (clusters.length === 0) return;
+
+  let maxAddedHeight = 0;
+
+  for (const cluster of clusters) {
+    const rect = cluster.querySelector(':scope > rect, rect') as SVGRectElement | null;
+    if (!rect) continue;
+
+    const clusterY = parseFloat(rect.getAttribute('y') || '0');
+    const clusterX = parseFloat(rect.getAttribute('x') || '0');
+    const clusterWidth = parseFloat(rect.getAttribute('width') || '0');
+    const clusterHeight = parseFloat(rect.getAttribute('height') || '0');
+    if (clusterWidth <= 0 || clusterHeight <= 0) continue;
+
+    // Find the cluster header label
+    const label = cluster.querySelector('.cluster-label, .cluster-title, text');
+    if (!label) continue;
+
+    let labelBottomY = clusterY + 24;
+    const labelTransform = label.getAttribute('transform');
+    if (labelTransform) {
+      const match = labelTransform.match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (match && match[2] !== undefined) {
+        labelBottomY = parseFloat(match[2]) + 16;
+      }
+    } else {
+      const ly = parseFloat(label.getAttribute('y') || '0');
+      if (ly > 0) labelBottomY = ly + 16;
+    }
+
+    // Find cards / tasks within this cluster
+    const allNodes = Array.from(doc.querySelectorAll('g.node, .kanban-item, .kanban-ticket, .task'));
+    const columnNodes: Array<{ node: Element; x: number; y: number; rawTransform: string }> = [];
+
+    for (const node of allNodes) {
+      const t = node.getAttribute('transform') || '';
+      const match = t.match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (!match) continue;
+      const nx = parseFloat(match[1]!);
+      const ny = parseFloat(match[2]!);
+
+      const isInside = (nx >= clusterX - 5 && nx <= clusterX + clusterWidth + 5) || cluster.contains(node);
+      if (isInside && ny >= clusterY - 10 && ny <= clusterY + clusterHeight + 60) {
+        columnNodes.push({ node, x: nx, y: ny, rawTransform: t });
+      }
+    }
+
+    if (columnNodes.length === 0) continue;
+
+    columnNodes.sort((a, b) => a.y - b.y);
+
+    const firstNode = columnNodes[0]!;
+    const nodeCard = firstNode.node.querySelector('rect, polygon, circle');
+    const cardHeight = nodeCard ? parseFloat(nodeCard.getAttribute('height') || '40') : 40;
+    const cardTop = firstNode.y - cardHeight / 2;
+
+    const desiredCardTop = labelBottomY + 14;
+    if (cardTop < desiredCardTop) {
+      const shiftY = Math.ceil(desiredCardTop - cardTop);
+      if (shiftY > 0 && shiftY < 200) {
+        for (const item of columnNodes) {
+          const newY = item.y + shiftY;
+          const updatedTransform = item.rawTransform.replace(
+            /translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/,
+            `translate($1, ${newY})`
+          );
+          item.node.setAttribute('transform', updatedTransform);
+        }
+
+        rect.setAttribute('height', String(clusterHeight + shiftY));
+        if (shiftY > maxAddedHeight) {
+          maxAddedHeight = shiftY;
+        }
+      }
+    }
+  }
+
+  if (maxAddedHeight > 0) {
+    const root = doc.documentElement;
+    const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+    if (viewBox.length === 4 && viewBox.every(Number.isFinite)) {
+      const [vx, vy, vw, vh] = viewBox as [number, number, number, number];
+      root.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh + maxAddedHeight}`);
+      const h = parseFloat(root.getAttribute('height') || '0');
+      if (h > 0) {
+        root.setAttribute('height', String(h + maxAddedHeight));
+      }
+    }
+  }
+}
+
 export function styleSvg(
   svg: string,
   direction: Direction | '',
@@ -560,76 +658,80 @@ export function styleSvg(
     equalizeCardWidths(doc, direction);
   }
 
-  // Orthogonal connector routing and corner rounding
-  for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
-    const d = path.getAttribute('d') || '';
-    if (!d) continue;
+  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
 
-    const points = routePoints(d);
-    if (!points || points.length < 2) {
-      path.setAttribute('d', softenOrthogonalPath(d, 8));
-      continue;
-    }
+  // Orthogonal connector routing and corner rounding (flowchart-only)
+  if (isFlowchart) {
+    for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
+      const d = path.getAttribute('d') || '';
+      if (!d) continue;
 
-    const edge = resolveEdge(doc, path);
-    let routed: string | null = null;
+      const points = routePoints(d);
+      if (!points || points.length < 2) {
+        path.setAttribute('d', softenOrthogonalPath(d, 8));
+        continue;
+      }
 
-    if (compactLayout && direction && edge) {
-      const from = nodeBounds(doc, edge[1]);
-      const to = nodeBounds(doc, edge[2]);
-      if (from && to) {
-        const delta = to.center[axis] - from.center[axis];
-        if (Math.abs(delta) >= 0.01) {
-          const travelSign = Math.sign(delta);
-          const pathOffset = transformOffset(path);
-          if (pathOffset) {
-            points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]) as Point;
-            points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]) as Point;
-            const forward = sign * delta > 0;
-            if (forward) {
-              const sourceLimit = nodeLimit(doc, edge[1], direction, true)! - pathOffset[axis];
-              const targetLimit = nodeLimit(doc, edge[2], direction, false)! - pathOffset[axis];
-              routed = orthogonalPath(
-                points,
-                direction,
-                sourceLimit,
-                targetLimit,
-                branchLevels.has(edge[1]) ? branchLevels.get(edge[1])! - pathOffset[axis] : undefined
-              );
-            } else {
-              // Keep Mermaid's outer return lane and remove small stairs
-              routed = returnLanePath(points, direction, from, to, pathOffset);
+      const edge = resolveEdge(doc, path);
+      let routed: string | null = null;
+
+      if (compactLayout && direction && edge) {
+        const from = nodeBounds(doc, edge[1]);
+        const to = nodeBounds(doc, edge[2]);
+        if (from && to) {
+          const delta = to.center[axis] - from.center[axis];
+          if (Math.abs(delta) >= 0.01) {
+            const travelSign = Math.sign(delta);
+            const pathOffset = transformOffset(path);
+            if (pathOffset) {
+              points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]) as Point;
+              points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]) as Point;
+              const forward = sign * delta > 0;
+              if (forward) {
+                const sourceLimit = nodeLimit(doc, edge[1], direction, true)! - pathOffset[axis];
+                const targetLimit = nodeLimit(doc, edge[2], direction, false)! - pathOffset[axis];
+                routed = orthogonalPath(
+                  points,
+                  direction,
+                  sourceLimit,
+                  targetLimit,
+                  branchLevels.has(edge[1]) ? branchLevels.get(edge[1])! - pathOffset[axis] : undefined
+                );
+              } else {
+                // Keep Mermaid's outer return lane and remove small stairs
+                routed = returnLanePath(points, direction, from, to, pathOffset);
+              }
             }
           }
         }
       }
-    }
 
-    if (routed) {
-      const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
-      const a = route.length > 2 ? route[1] : route[0];
-      const b = route.length > 2 ? route[2] : route[1];
-      const offset = transformOffset(path) || [0, 0];
-      if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
-        const edgeId = path.getAttribute('data-id') || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : '');
-        const fallbackPos: Point = [
-          (a[0] + b[0]) / 2 + offset[0],
-          (a[1] + b[1]) / 2 + offset[1],
-        ];
-        if (edgeId && !labelPositions.has(edgeId)) {
-          labelPositions.set(edgeId, fallbackPos);
+      if (routed) {
+        const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
+        const a = route.length > 2 ? route[1] : route[0];
+        const b = route.length > 2 ? route[2] : route[1];
+        const offset = transformOffset(path) || [0, 0];
+        if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
+          const edgeId = path.getAttribute('data-id') || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : '');
+          const fallbackPos: Point = [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1],
+          ];
+          if (edgeId && !labelPositions.has(edgeId)) {
+            labelPositions.set(edgeId, fallbackPos);
+          }
+          if (edge) {
+            const lKey = `L_${edge[1]}_${edge[2]}_`;
+            const hKey = `L-${edge[1]}-${edge[2]}-`;
+            if (!labelPositions.has(lKey)) labelPositions.set(lKey, fallbackPos);
+            if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
+          }
         }
-        if (edge) {
-          const lKey = `L_${edge[1]}_${edge[2]}_`;
-          const hKey = `L-${edge[1]}-${edge[2]}-`;
-          if (!labelPositions.has(lKey)) labelPositions.set(lKey, fallbackPos);
-          if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
-        }
+        routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
+        path.setAttribute('d', roundPath(routed, 8));
+      } else {
+        path.setAttribute('d', roundPath(d, 8));
       }
-      routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
-      path.setAttribute('d', roundPath(routed, 8));
-    } else {
-      path.setAttribute('d', roundPath(d, 8));
     }
   }
 
@@ -698,19 +800,20 @@ export function styleSvg(
   }
 
   // Broad filled triangles, independent of connector stroke width
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
     marker.setAttribute('markerUnits', 'userSpaceOnUse');
     marker.setAttribute('markerWidth', '8');
     marker.setAttribute('markerHeight', '8');
     marker.setAttribute('viewBox', '0 0 10 10');
     marker.setAttribute('refY', '5');
     marker.setAttribute('orient', 'auto');
-    const start = marker.id.endsWith('pointStart');
+    const start = marker.id.endsWith('pointStart') || marker.id.includes('barbStart');
     marker.setAttribute('refX', start ? '0' : '10');
     const path = marker.querySelector('path');
     if (path) {
       path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
       path.setAttribute('stroke-width', '0');
+      path.setAttribute('fill', palette.line);
     }
   }
 
@@ -774,6 +877,9 @@ export function styleSvg(
     edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
 
+  // Resolve Kanban and cluster header overlaps so column titles are never blocked by cards
+  fixClusterHeaderOverlap(doc);
+
   // Expand viewBox if outer return lanes or routes extend past original dimensions
   const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
@@ -807,19 +913,20 @@ export function styleSvg(
   }
 
   // Clean triangular markers for connectors
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
     marker.setAttribute('markerUnits', 'userSpaceOnUse');
     marker.setAttribute('markerWidth', '8');
     marker.setAttribute('markerHeight', '8');
     marker.setAttribute('viewBox', '0 0 10 10');
     marker.setAttribute('refY', '5');
     marker.setAttribute('orient', 'auto');
-    const start = marker.id.endsWith('pointStart');
+    const start = marker.id.endsWith('pointStart') || marker.id.includes('barbStart');
     marker.setAttribute('refX', start ? '0' : '10');
     const path = marker.querySelector('path');
     if (path) {
       path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
       path.setAttribute('stroke-width', '0');
+      path.setAttribute('fill', palette.line);
     }
   }
 
@@ -833,6 +940,23 @@ export function styleSvg(
 
   // Apply colored flow blocks using graph group structure and palette
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
+
+  if (dark) {
+    // Normalise hardcoded #444444 lines, paths, and text in C4 architecture to high-contrast palette colors
+    for (const el of doc.querySelectorAll('[stroke="#444444"], [stroke="#444"], [stroke="#333333"]')) {
+      el.setAttribute('stroke', palette.line);
+    }
+    for (const el of doc.querySelectorAll('[fill="#444444"], [fill="#444"], [fill="#333333"]')) {
+      el.setAttribute('fill', palette.text);
+    }
+    // Ensure timeline event text is high-contrast
+    for (const text of doc.querySelectorAll('g[class*="timeline"] text, g[class*="event"] text, .event text, .timeline-event text')) {
+      const fill = (text.getAttribute('fill') || '').toLowerCase();
+      if (!fill || fill === '#000000' || fill === '#000' || fill === 'black' || fill === '#111111') {
+        text.setAttribute('fill', palette.text);
+      }
+    }
+  }
 
   // Mark SVG as enhanced and set custom properties
   root.classList?.add?.('mfe-enhanced', 'mermaid-genie-diagram');

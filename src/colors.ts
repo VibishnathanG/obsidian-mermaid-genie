@@ -17,6 +17,7 @@ export interface ThemeColors {
 export interface PaletteData extends ThemeColors {
   fills: string[];
   borders: string[];
+  textOnFills: string[];
 }
 
 export const LIGHT_SINGLE_PRESETS: Record<SinglePaletteName, ThemeColors> = {
@@ -112,30 +113,37 @@ export function resolvePaletteData(
 
   if (style === 'multi') {
     const multi = MULTICOLOR_PALETTES[multiPalette]?.[dark ? 'dark' : 'light'] ?? MULTICOLOR_PALETTES.clear[dark ? 'dark' : 'light'];
+    const preferredText = customColors?.text ?? basePreset.text;
+    const textOnFills = multi.fills.map(f => textOnFill(f, preferredText));
     return {
       ...basePreset,
       surface: multi.fills[0]!,
       border: multi.borders[0]!,
       fills: multi.fills,
       borders: multi.borders,
+      textOnFills,
       ...customColors,
     };
   }
 
   if (style === 'custom' && customColors) {
     const merged = { ...basePreset, ...customColors };
+    const preferredText = merged.text;
     return {
       ...merged,
       fills: [merged.surface],
       borders: [merged.border],
+      textOnFills: [textOnFill(merged.surface, preferredText)],
     };
   }
 
   // Single preset
+  const preferredText = customColors?.text ?? basePreset.text;
   return {
     ...basePreset,
     fills: [basePreset.surface],
     borders: [basePreset.border],
+    textOnFills: [textOnFill(basePreset.surface, preferredText)],
     ...customColors,
   };
 }

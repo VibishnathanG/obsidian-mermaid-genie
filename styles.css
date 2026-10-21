@@ -178,6 +178,15 @@
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon) {
   fill: var(--mpe-line);
   stroke: var(--mpe-line);
+  stroke-width: 0 !important;
+}
+
+/* Hollow markers (e.g. inheritance in class diagrams) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker.extension :is(path, polygon),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="extension"] :is(path, polygon) {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.25px !important;
 }
 
 /* --- Universal Support for All Mermaid Diagram Types --- */
@@ -279,10 +288,34 @@
   fill: var(--mpe-text) !important;
 }
 
-/* C4 & Block Diagrams */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container, .c4-person, .block) {
+/* C4 Architecture & Block Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container, .c4-person, .c4-boundary, .c4-system, .block) {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container text, .c4-person text, .c4-boundary text, .c4-system text) {
+  fill: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.relationshipLine, .relation, .line, line[stroke="#444444"], path[stroke="#444444"], line[stroke="#444"], path[stroke="#444"]) {
+  stroke: var(--mpe-line) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.relationshipLabel, .relation-label, .relationship-label, text[fill="#444444"], text[fill="#444"]) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+/* Timelines */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.timeline-event text, .timeline-section text, .timeline-title text, .timeline text, .task-type-0 text, .task-type-1 text, .task-type-2 text, .task-type-3 text, .task-type-4 text, .task-type-5 text, g[class*="timeline"] text, g[class*="event"] text, .timeline-wrapper text) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.timeline-event, .timeline-section, g[class*="timeline"], g[class*="event"]) :is(span, p, div, text) {
+  color: var(--mpe-text) !important;
+  fill: var(--mpe-text) !important;
 }
 
 /* --- Edge Label Badges (Never blocked or obscured by arrows) --- */
