@@ -1,0 +1,9 @@
+{
+  "id": "mermaid-genie",
+  "name": "Mermaid Genie",
+  "version": "1.0.0",
+  "minAppVersion": "1.14.2",
+  "description": "Smart, beautiful Mermaid flowcharts with coordinated colored flow blocks, aligned branches, ancestor path highlighting, crisp typography, and diagram export.",
+  "author": "Mermaid Genie Contributors",
+  "isDesktopOnly": false
+}

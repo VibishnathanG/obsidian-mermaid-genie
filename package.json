@@ -1,0 +1,30 @@
+{
+  "name": "obsidian-mermaid-genie",
+  "version": "1.0.0",
+  "description": "Smart, beautiful Mermaid flowcharts for Obsidian with coordinated colored flow blocks, aligned branches, ancestor path highlighting, crisp typography, and diagram export.",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsx esbuild.config.mts",
+    "dev": "tsx esbuild.config.mts --watch",
+    "test": "tsx --test tests/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "mermaid",
+    "flowchart",
+    "diagram",
+    "colors",
+    "styling"
+  ],
+  "author": "Mermaid Genie Contributors",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.14.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
