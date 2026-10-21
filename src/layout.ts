@@ -339,6 +339,58 @@ export function equalizeCardWidths(doc: Document | Element, direction: Direction
 }
 
 /** Processes and enhances the Mermaid SVG diagram with layout alignment, coloring, and clean formatting. */
+export function computeDiagramSpacing(text: string, direction: string = 'TD'): { nodeSpacing: number; rankSpacing: number } {
+  const matches = [
+    ...text.matchAll(/(?:--+>|==+>|-\.+->?|--+|==+)\s*\|([^|\n]+)\|/g),
+    ...text.matchAll(/--\s*([^->\n|]+?)\s*-->/g),
+    ...text.matchAll(/==\s*([^=>\n|]+?)\s*==>/g),
+  ];
+
+  let maxLen = 0;
+  for (const m of matches) {
+    const raw = (m[1] || '').trim();
+    if (raw.length > maxLen) {
+      maxLen = raw.length;
+    }
+  }
+
+  const outgoingCounts = new Map<string, number>();
+  const linkMatches = text.matchAll(/([a-zA-Z0-9_-]+)\s*(?:--+>|==+>|-\.+->?|--+|==+)/g);
+  for (const lm of linkMatches) {
+    const src = lm[1];
+    if (src && src !== 'flowchart' && src !== 'graph') outgoingCounts.set(src, (outgoingCounts.get(src) || 0) + 1);
+  }
+
+  let maxFanOut = 0;
+  for (const count of outgoingCounts.values()) {
+    if (count > maxFanOut) maxFanOut = count;
+  }
+
+  const isVertical = !/^(LR|RL)$/i.test(direction);
+
+  let baseNode = 55;
+  let baseRank = 65;
+
+  if (maxLen > 0) {
+    // Proportional node spacing to give labels adequate horizontal span
+    const labelSpacingAdd = Math.max(0, (maxLen - 6) * 4);
+    const fanOutAdd = maxFanOut >= 4 ? Math.min(40, (maxFanOut - 3) * 10) : 0;
+    baseNode = Math.min(130, Math.max(60, 60 + labelSpacingAdd + fanOutAdd));
+
+    // Proportional rank spacing to expand arrow lines and link links
+    const rankAdd = Math.max(0, (maxLen - 8) * 1.5) + (maxFanOut >= 3 ? 15 : 0);
+    baseRank = Math.min(105, Math.max(70, 70 + rankAdd));
+  } else {
+    baseNode = 50;
+    baseRank = 60;
+  }
+
+  return {
+    nodeSpacing: isVertical ? baseNode : baseRank,
+    rankSpacing: isVertical ? baseRank : baseNode,
+  };
+}
+
 export function styleSvg(
   svg: string,
   direction: Direction | '',
@@ -429,6 +481,8 @@ export function styleSvg(
   const branchLevels = new Map<string, number>();
   const outgoing = new Map<string, number[]>();
   const sign = /^(BT|RL)$/.test(direction) ? -1 : 1;
+  const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
+  const crossAxis: Axis = axis === 0 ? 1 : 0;
 
   for (const path of compactLayout ? doc.querySelectorAll('path.flowchart-link, .edgePath path.path') : []) {
     const edge = resolveEdge(doc, path);
@@ -444,6 +498,61 @@ export function styleSvg(
   }
   for (const [source, levels] of outgoing) {
     if (levels.length > 1) branchLevels.set(source, sign > 0 ? Math.min(...levels) : Math.max(...levels));
+  }
+
+  // Pre-calculate dedicated disjoint spans for sibling branches leaving the same node
+  const outgoingBySource = new Map<string, Array<{ target: string; edgeId: string; crossCoord: number }>>();
+  if (compactLayout && direction) {
+    for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
+      const edge = resolveEdge(doc, path);
+      if (!edge) continue;
+      const from = nodeBounds(doc, edge[1]);
+      const to = nodeBounds(doc, edge[2]);
+      if (!from || !to) continue;
+      const delta = to.center[axis] - from.center[axis];
+      if (sign * delta > 0) {
+        const edgeId = path.getAttribute('data-id') || path.id || `L_${edge[1]}_${edge[2]}_`;
+        const list = outgoingBySource.get(edge[1]) || [];
+        list.push({ target: edge[2], edgeId, crossCoord: to.center[crossAxis] });
+        outgoingBySource.set(edge[1], list);
+      }
+    }
+
+    for (const [sourceKey, list] of outgoingBySource) {
+      const from = nodeBounds(doc, sourceKey);
+      if (!from) continue;
+      const sourceCenter = from.center[crossAxis];
+      const branchLevel = branchLevels.get(sourceKey);
+
+      const left = list.filter(item => item.crossCoord < sourceCenter - 0.01)
+        .sort((a, b) => b.crossCoord - a.crossCoord);
+      const right = list.filter(item => item.crossCoord > sourceCenter + 0.01)
+        .sort((a, b) => a.crossCoord - b.crossCoord);
+
+      let prevLeft = sourceCenter;
+      for (const item of left) {
+        const midpointCross = (prevLeft + item.crossCoord) / 2;
+        const to = nodeBounds(doc, item.target);
+        const levelAxis = branchLevel ?? (to ? (from.max[axis] + to.min[axis]) / 2 : from.center[axis]);
+        const pos: Point = axis === 1 ? [midpointCross, levelAxis] : [levelAxis, midpointCross];
+        labelPositions.set(item.edgeId, pos);
+        labelPositions.set(`L_${sourceKey}_${item.target}_`, pos);
+        labelPositions.set(`L-${sourceKey}-${item.target}-`, pos);
+        prevLeft = item.crossCoord;
+      }
+
+      let prevRight = sourceCenter;
+      for (const item of right) {
+        const midpointCross = (prevRight + item.crossCoord) / 2;
+        const to = nodeBounds(doc, item.target);
+        const levelAxis = branchLevel ?? (to ? (from.max[axis] + to.min[axis]) / 2 : from.center[axis]);
+        const pos: Point = axis === 1 ? [midpointCross, levelAxis] : [levelAxis, midpointCross];
+        labelPositions.set(item.edgeId, pos);
+        labelPositions.set(`L_${sourceKey}_${item.target}_`, pos);
+        labelPositions.set(`L-${sourceKey}-${item.target}-`, pos);
+        prevRight = item.crossCoord;
+      }
+    }
   }
 
   // Equalize card widths in the same rank/layer for neat, clean block alignment
@@ -468,7 +577,6 @@ export function styleSvg(
     if (compactLayout && direction && edge) {
       const from = nodeBounds(doc, edge[1]);
       const to = nodeBounds(doc, edge[2]);
-      const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
       if (from && to) {
         const delta = to.center[axis] - from.center[axis];
         if (Math.abs(delta) >= 0.01) {
@@ -504,21 +612,18 @@ export function styleSvg(
       const offset = transformOffset(path) || [0, 0];
       if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
         const edgeId = path.getAttribute('data-id') || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : '');
-        if (edgeId) {
-          labelPositions.set(edgeId, [
-            (a[0] + b[0]) / 2 + offset[0],
-            (a[1] + b[1]) / 2 + offset[1],
-          ]);
+        const fallbackPos: Point = [
+          (a[0] + b[0]) / 2 + offset[0],
+          (a[1] + b[1]) / 2 + offset[1],
+        ];
+        if (edgeId && !labelPositions.has(edgeId)) {
+          labelPositions.set(edgeId, fallbackPos);
         }
         if (edge) {
-          labelPositions.set(`L_${edge[1]}_${edge[2]}_`, [
-            (a[0] + b[0]) / 2 + offset[0],
-            (a[1] + b[1]) / 2 + offset[1],
-          ]);
-          labelPositions.set(`L-${edge[1]}-${edge[2]}-`, [
-            (a[0] + b[0]) / 2 + offset[0],
-            (a[1] + b[1]) / 2 + offset[1],
-          ]);
+          const lKey = `L_${edge[1]}_${edge[2]}_`;
+          const hKey = `L-${edge[1]}-${edge[2]}-`;
+          if (!labelPositions.has(lKey)) labelPositions.set(lKey, fallbackPos);
+          if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
         }
       }
       routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
@@ -528,8 +633,19 @@ export function styleSvg(
     }
   }
 
-  // Move edge labels with our routed paths so they align cleanly on the connector bridges
+  // Collect non-empty edge labels for positioning and vertical collision avoidance
+  const placedLabels: Array<{ el: Element; x: number; y: number; width: number; height: number }> = [];
+
   for (const label of doc.querySelectorAll('.edgeLabels > .edgeLabel, .edgeLabel')) {
+    const text = (label.textContent || '').trim();
+    if (!text) {
+      // Empty flow edge: remove completely so no small empty rectangles appear
+      label.setAttribute('data-empty', 'true');
+      label.classList.add('edgeLabel-empty');
+      label.remove();
+      continue;
+    }
+
     const key = label.getAttribute('data-id') || label.querySelector('[data-id]')?.getAttribute('data-id') || label.id;
     let position = key ? labelPositions.get(key) : undefined;
     if (!position && key) {
@@ -540,13 +656,45 @@ export function styleSvg(
         }
       }
     }
-    const offset = transformOffset(label.parentNode);
-    if (position && Number.isFinite(position[0]) && Number.isFinite(position[1]) && offset && Number.isFinite(offset[0]) && Number.isFinite(offset[1])) {
-      label.setAttribute(
-        'transform',
-        `translate(${position.map((value, ax) => value - offset[ax]!).join(',')})`
-      );
+
+    if (position && Number.isFinite(position[0]) && Number.isFinite(position[1])) {
+      const fo = label.querySelector('foreignObject');
+      const rect = label.querySelector('rect');
+      const measuredWidth = fo ? parseFloat(fo.getAttribute('width') || '0')
+        : rect ? parseFloat(rect.getAttribute('width') || '0')
+        : 0;
+      const width = measuredWidth > 0 ? measuredWidth : Math.max(30, text.length * 8 + 16);
+      placedLabels.push({
+        el: label,
+        x: position[0],
+        y: position[1],
+        width,
+        height: 24,
+      });
     }
+  }
+
+  // Detect and resolve horizontal overlaps on the same level by staggering vertically
+  placedLabels.sort((a, b) => a.x - b.x);
+  for (let i = 0; i < placedLabels.length - 1; i++) {
+    const curr = placedLabels[i]!;
+    const next = placedLabels[i + 1]!;
+    if (Math.abs(curr.y - next.y) < 12) {
+      const minDistance = (curr.width + next.width) / 2 + 8;
+      const actualDistance = next.x - curr.x;
+      if (actualDistance < minDistance) {
+        curr.y -= 12;
+        next.y += 12;
+      }
+    }
+  }
+
+  for (const item of placedLabels) {
+    const offset = transformOffset(item.el.parentNode) || [0, 0];
+    item.el.setAttribute(
+      'transform',
+      `translate(${item.x - offset[0]},${item.y - offset[1]})`
+    );
   }
 
   // Broad filled triangles, independent of connector stroke width
@@ -578,6 +726,13 @@ export function styleSvg(
 
   // Format edge label badges so words over arrows are never blocked
   for (const label of doc.querySelectorAll('.edgeLabel')) {
+    const text = (label.textContent || '').trim();
+    if (!text) {
+      label.setAttribute('data-empty', 'true');
+      label.classList.add('edgeLabel-empty');
+      label.remove();
+      continue;
+    }
     // 1. For SVG rects inside edgeLabel
     for (const rect of label.querySelectorAll('rect')) {
       const width = parseFloat(rect.getAttribute('width') || '0');

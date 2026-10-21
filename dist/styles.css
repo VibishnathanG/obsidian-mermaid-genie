@@ -291,6 +291,22 @@
   overflow: visible !important;
 }
 
+/* Empty edge labels: hide completely so empty flows never show small rectangles */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel:empty,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel :is(span.edgeLabel, .label):empty,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel[data-empty="true"],
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel.edgeLabel-empty,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel rect[width="0"],
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel rect[height="0"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel foreignObject {
   overflow: visible !important;
 }
@@ -305,6 +321,10 @@
   font-weight: 500 !important;
   line-height: 1.35 !important;
   white-space: nowrap !important;
+  max-width: 220px !important;
+  text-align: center !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
   display: inline-block !important;
   opacity: 1 !important;

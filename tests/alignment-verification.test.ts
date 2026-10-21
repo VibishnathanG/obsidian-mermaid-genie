@@ -27,7 +27,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const { styleSvg, equalizeCardWidths, wrapDecisions } = require('../src/layout');
+const { styleSvg, equalizeCardWidths, wrapDecisions, computeDiagramSpacing } = require('../src/layout');
 const { DEFAULT_SETTINGS } = require('../src/settings');
 const { resolvePaletteData } = require('../src/colors');
 Module._load = originalLoad;
@@ -129,5 +129,79 @@ describe('Alignment & Layout Precision Tests', () => {
     const pieSvg = `<svg id="pie" class="mermaid"><path class="pieCircle" d="M0,0 L10,10"/><text class="pieTitleText">Pets</text></svg>`;
     const enhancedPie = styleSvg(pieSvg, '', DEFAULT_SETTINGS, palette, false);
     assert.ok(enhancedPie.includes('class="mermaid mfe-enhanced mermaid-genie-diagram"'));
+  });
+
+  it('removes empty edgeLabels so no small empty rectangle boxes appear on empty flows', () => {
+    const rawSvg = `<svg id="test-empty-labels" class="mermaid">
+      <g id="flowchart-A-0" class="node default"><rect width="80" height="40"/><text>Start</text></g>
+      <g id="flowchart-B-1" class="node default"><rect width="80" height="40"/><text>Next</text></g>
+      <g id="flowchart-C-2" class="node default"><rect width="80" height="40"/><text>End</text></g>
+      <g class="edgePaths">
+        <path id="L-A-B-0" class="flowchart-link" d="M40,40L40,80"/>
+        <path id="L-B-C-1" class="flowchart-link" d="M40,120L40,160"/>
+      </g>
+      <g class="edgeLabels">
+        <g class="edgeLabel" id="empty-label-1" data-id="L-A-B-0">
+          <g class="label"><foreignObject width="0" height="0"><div><span class="edgeLabel"></span></div></foreignObject></g>
+        </g>
+        <g class="edgeLabel" id="active-label-2" data-id="L-B-C-1">
+          <g class="label"><foreignObject width="60" height="20"><div><span class="edgeLabel">Valid Label</span></div></foreignObject></g>
+        </g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(rawSvg, 'TD', DEFAULT_SETTINGS, palette, false);
+    assert.ok(!enhanced.includes('id="empty-label-1"'), 'Empty edge label should be completely removed from DOM');
+    assert.ok(enhanced.includes('id="active-label-2"'), 'Non-empty edge label should be preserved');
+    assert.ok(enhanced.includes('Valid Label'), 'Valid label content should remain');
+  });
+
+  it('expands diagram spacing adaptively when long edge labels or high fan-out branches exist', () => {
+    const simpleDiag = `flowchart TD\n  A --> B\n  B --> C`;
+    const simpleSpacing = computeDiagramSpacing(simpleDiag, 'TD');
+    assert.equal(simpleSpacing.nodeSpacing, 50);
+    assert.equal(simpleSpacing.rankSpacing, 60);
+
+    const complexDiag = `flowchart TD
+      A{"What is the binding constraint?"}
+      A -->|Balanced, general| B["M family"]
+      A -->|CPU-bound| C["C family"]
+      A -->|Memory-bound| D["R or X family"]
+      A -->|Storage IOPS| E["I family with instance store"]
+      A -->|GPU or accelerator| F["P, G, Inf, or Trn family"]
+      A -->|Low and spiky| G["T family — burstable"]
+    `;
+    const complexSpacing = computeDiagramSpacing(complexDiag, 'TD');
+    // Long edge labels and 6 branches must expand nodeSpacing and rankSpacing significantly
+    assert.ok(complexSpacing.nodeSpacing >= 110, `Expected nodeSpacing >= 110, got ${complexSpacing.nodeSpacing}`);
+    assert.ok(complexSpacing.rankSpacing >= 85, `Expected rankSpacing >= 85, got ${complexSpacing.rankSpacing}`);
+  });
+
+  it('separates multi-branch sibling edge labels into disjoint horizontal intervals without overlap', () => {
+    const rawSvg = `<svg id="test-multibranch" class="mermaid">
+      <g id="flowchart-root-0" class="node default"><polygon points="500,60 560,90 500,120 440,90"/></g>
+      <g id="flowchart-n1-1" class="node default"><rect x="60" y="180" width="80" height="40"/></g>
+      <g id="flowchart-n2-2" class="node default"><rect x="220" y="180" width="80" height="40"/></g>
+      <g id="flowchart-n3-3" class="node default"><rect x="360" y="180" width="80" height="40"/></g>
+      <g class="edgePaths">
+        <path id="L-root-n1-0" class="flowchart-link" d="M500,120L100,120L100,180"/>
+        <path id="L-root-n2-1" class="flowchart-link" d="M500,120L260,120L260,180"/>
+        <path id="L-root-n3-2" class="flowchart-link" d="M500,120L400,120L400,180"/>
+      </g>
+      <g class="edgeLabels">
+        <g class="edgeLabel" data-id="L-root-n1-0"><g class="label"><foreignObject width="100" height="20"><div><span>Balanced, general</span></div></foreignObject></g></g>
+        <g class="edgeLabel" data-id="L-root-n2-1"><g class="label"><foreignObject width="70" height="20"><div><span>CPU-bound</span></div></foreignObject></g></g>
+        <g class="edgeLabel" data-id="L-root-n3-2"><g class="label"><foreignObject width="80" height="20"><div><span>Memory-bound</span></div></foreignObject></g></g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(rawSvg, 'TD', DEFAULT_SETTINGS, palette, false);
+    // Extract translate X coordinates of all 3 labels
+    const matches = [...enhanced.matchAll(/class="edgeLabel"[^>]*transform="translate\(([-0-9.]+),/g)];
+    assert.equal(matches.length, 3, 'All 3 non-empty labels should have transforms');
+    const xCoords = matches.map(m => parseFloat(m[1]!)).sort((a, b) => a - b);
+    // Verify each label is spaced far apart (at least 50px between centers)
+    assert.ok(xCoords[1]! - xCoords[0]! >= 50, `Distance between label 0 and 1 should be >= 50, got ${xCoords[1]! - xCoords[0]!}`);
+    assert.ok(xCoords[2]! - xCoords[1]! >= 50, `Distance between label 1 and 2 should be >= 50, got ${xCoords[2]! - xCoords[1]!}`);
   });
 });

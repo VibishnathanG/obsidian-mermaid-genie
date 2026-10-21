@@ -16,7 +16,7 @@ import { resolvePaletteData } from './colors';
 import { DiagramFileExport } from './file-export';
 import { DiagramExportControls, DiagramPickerModal, exportDiagram } from './export-controls';
 import { createPathController } from './highlight';
-import { styleSvg, widenSingleRectangles, wrapDecisions, type Direction } from './layout';
+import { computeDiagramSpacing, styleSvg, widenSingleRectangles, wrapDecisions, type Direction } from './layout';
 import { DEFAULT_SETTINGS, GenieSettingsTab, normalizeSettings, type GenieSettings } from './settings';
 import { SvgClipboard } from './svg-clipboard';
 
@@ -249,8 +249,8 @@ export default class MermaidGeniePlugin extends Plugin {
         },
         flowchart: {
           curve: 'step',
-          nodeSpacing: 45,
-          rankSpacing: 50,
+          nodeSpacing: computeDiagramSpacing(text, direction ?? 'TD').nodeSpacing,
+          rankSpacing: computeDiagramSpacing(text, direction ?? 'TD').rankSpacing,
           padding: 16,
           diagramPadding: 20,
           subGraphTitleMargin: { top: 12, bottom: 16 },
