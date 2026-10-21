@@ -777,6 +777,70 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
   }
 }
 
+// src/rounded-path.ts
+var same = (a, b) => Math.abs(a.x - b.x) < 1e-3 && Math.abs(a.y - b.y) < 1e-3;
+var axis = (a, b) => Math.abs(a.x - b.x) < 1e-3 || Math.abs(a.y - b.y) < 1e-3;
+function softenOrthogonalPath(path, radius) {
+  const tokens = path.match(/[MLQ]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi) ?? [];
+  if (tokens.join("") !== path.replace(/[\s,]/g, "") || !path.startsWith("M")) return path;
+  const points = [];
+  let index = 0;
+  let current;
+  while (index < tokens.length) {
+    const command = tokens[index++];
+    const x = Number(tokens[index++]);
+    const y = Number(tokens[index++]);
+    if (!Number.isFinite(x + y)) return path;
+    const point = { x, y };
+    if (command === "Q") {
+      const end = { x: Number(tokens[index++]), y: Number(tokens[index++]) };
+      if (!current || !Number.isFinite(end.x + end.y) || !axis(current, point) || !axis(point, end) || axis(current, end)) {
+        return path;
+      }
+      points.pop();
+      points.push(point, end);
+      current = end;
+    } else if (command === "M" || command === "L") {
+      if (command === "M" && points.length) return path;
+      points.push(point);
+      current = point;
+    } else {
+      return path;
+    }
+  }
+  const route = [];
+  for (const point of points) {
+    if (route.length && same(route[route.length - 1], point)) continue;
+    while (route.length > 1) {
+      const a = route[route.length - 2];
+      const b = route[route.length - 1];
+      if (!axis(a, b) || !axis(b, point) || !axis(a, point)) break;
+      if ((b.x - a.x) * (point.x - b.x) + (b.y - a.y) * (point.y - b.y) < 0) break;
+      route.pop();
+    }
+    route.push(point);
+  }
+  if (route.length < 2 || route.some((p, i) => i > 0 && !axis(route[i - 1], p))) return path;
+  const pair = (p) => `${p.x},${p.y}`;
+  let result = `M${pair(route[0])}`;
+  for (let i = 1; i < route.length - 1; i++) {
+    const a = route[i - 1];
+    const b = route[i];
+    const c = route[i + 1];
+    const incoming = Math.hypot(b.x - a.x, b.y - a.y);
+    const outgoing = Math.hypot(c.x - b.x, c.y - b.y);
+    if (axis(a, c)) {
+      result += `L${pair(b)}`;
+      continue;
+    }
+    const cut = Math.min(radius, incoming / 2, outgoing / 2);
+    const start = { x: b.x + (a.x - b.x) * cut / incoming, y: b.y + (a.y - b.y) * cut / incoming };
+    const end = { x: b.x + (c.x - b.x) * cut / outgoing, y: b.y + (c.y - b.y) * cut / outgoing };
+    result += `L${pair(start)}Q${pair(b)} ${pair(end)}`;
+  }
+  return `${result}L${pair(route[route.length - 1])}`;
+}
+
 // src/layout.ts
 var edgeIndexes = /* @__PURE__ */ new WeakMap();
 function resolveEdge(doc, path) {
@@ -811,24 +875,6 @@ function resolveEdge(doc, path) {
   }
   return index.get(idPrefix) || null;
 }
-function orthogonalPath(points, direction, sourceLimit, targetLimit, branchLevel) {
-  const vertical = /^(TD|TB|BT)$/.test(direction);
-  const axis = vertical ? 1 : 0;
-  const cross = axis === 0 ? 1 : 0;
-  const first = points[0], last = points[points.length - 1];
-  if (!first || !last) return null;
-  const sign = Math.sign(last[axis] - first[axis]);
-  if (!sign) return null;
-  const a = sourceLimit ?? first[axis], b = targetLimit ?? last[axis];
-  if (sign * (b - a) <= 0) return null;
-  const level = branchLevel ?? (a + b) / 2;
-  const middle = sign * (level - a) > 0 && sign * (b - level) > 0 ? level : (a + b) / 2;
-  const p = [...first], q = [...last];
-  p[axis] = middle;
-  q[axis] = middle;
-  const route = Math.abs(first[cross] - last[cross]) < 0.01 ? [first, last] : [first, p, q, last];
-  return route.filter((pt, i) => !i || pt.some((v, j) => Math.abs(v - route[i - 1][j]) > 1e-3)).map((pt, i) => `${i ? "L" : "M"}${pt.join(",")}`).join("");
-}
 function transformOffset(element) {
   const offset = [0, 0];
   for (let el = element; el; el = el.parentNode) {
@@ -841,14 +887,14 @@ function transformOffset(element) {
   }
   return offset;
 }
-function polygonHasSideCenter(points, axis, side, centerCross) {
-  const min = Math.min(...points.map((point) => point[axis]));
-  const max = Math.max(...points.map((point) => point[axis]));
+function polygonHasSideCenter(points, axis2, side, centerCross) {
+  const min = Math.min(...points.map((point) => point[axis2]));
+  const max = Math.max(...points.map((point) => point[axis2]));
   const boundary = side === "min" ? min : max;
   const close = (a, b) => Math.abs(a - b) < 0.01;
   for (let i = 0; i < points.length; i++) {
     const a = points[i], b = points[(i + 1) % points.length];
-    const aa = a[axis], ba = b[axis], ac = a[1 - axis], bc = b[1 - axis];
+    const aa = a[axis2], ba = b[axis2], ac = a[1 - axis2], bc = b[1 - axis2];
     if (close(aa, boundary) && close(ba, boundary) && centerCross >= Math.min(ac, bc) - 0.01 && centerCross <= Math.max(ac, bc) + 0.01) return true;
     if (close(aa, boundary) && close(ac, centerCross)) return true;
     if (close(ba, boundary) && close(bc, centerCross)) return true;
@@ -870,8 +916,8 @@ function nodeBounds(doc, key) {
     x = source.map((point) => point[0]);
     y = source.map((point) => point[1]);
     const center = [(Math.min(...x) + Math.max(...x)) / 2, (Math.min(...y) + Math.max(...y)) / 2];
-    for (const axis of [0, 1]) {
-      if (!polygonHasSideCenter(source, axis, "min", center[1 - axis]) || !polygonHasSideCenter(source, axis, "max", center[1 - axis])) return void 0;
+    for (const axis2 of [0, 1]) {
+      if (!polygonHasSideCenter(source, axis2, "min", center[1 - axis2]) || !polygonHasSideCenter(source, axis2, "max", center[1 - axis2])) return void 0;
     }
   } else if (shape.tagName === "circle") {
     const values = ["cx", "cy", "r"].map((name) => shape.getAttribute(name));
@@ -902,18 +948,9 @@ function nodeBounds(doc, key) {
 function nodeLimit(doc, key, direction, outgoing) {
   const bounds = nodeBounds(doc, key);
   if (!bounds) return void 0;
-  const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
+  const axis2 = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
   const forward = !/^(BT|RL)$/.test(direction);
-  return outgoing === forward ? bounds.max[axis] : bounds.min[axis];
-}
-function centerAnchor(bounds, direction, travelSign, outgoing) {
-  const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
-  const cross = axis === 0 ? 1 : 0;
-  const sideSign = outgoing ? travelSign : -travelSign;
-  const anchor = [...bounds.center];
-  anchor[axis] = sideSign > 0 ? bounds.max[axis] : bounds.min[axis];
-  anchor[cross] = bounds.center[cross];
-  return anchor;
+  return outgoing === forward ? bounds.max[axis2] : bounds.min[axis2];
 }
 function returnLanePath(points, direction, from, to, offset = [0, 0]) {
   const vertical = /^(TD|TB|BT)$/.test(direction);
@@ -967,7 +1004,49 @@ function routePoints(d) {
   const matches = [...d.matchAll(command)];
   if (!matches.length || matches[0][1] !== "M" || d.replace(command, "").trim()) return null;
   if (matches.slice(1).some((m) => m[1] === "M")) return null;
-  return matches.flatMap((m) => m[1] ? [[Number(m[2]), Number(m[3])]] : [[Number(m[4]), Number(m[5])], [Number(m[6]), Number(m[7])]]).filter((point, i, all) => !i || point.some((v, axis) => Math.abs(v - all[i - 1][axis]) > 1e-3));
+  return matches.flatMap((m) => m[1] ? [[Number(m[2]), Number(m[3])]] : [[Number(m[4]), Number(m[5])], [Number(m[6]), Number(m[7])]]).filter((point, i, all) => !i || point.some((v, axis2) => Math.abs(v - all[i - 1][axis2]) > 1e-3));
+}
+function equalizeCardWidths(doc, direction) {
+  const isHorizontal = direction === "LR" || direction === "RL";
+  const axis2 = isHorizontal ? 0 : 1;
+  const cards = [];
+  for (const node of doc.querySelectorAll("g.node")) {
+    if (node.querySelector("polygon, circle, ellipse")) continue;
+    const rect = node.querySelector(":scope > .label-container, :scope > rect");
+    if (!rect) continue;
+    const t = (node.getAttribute("transform") || "").match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+    if (!t) continue;
+    const pos = [Number(t[1]), Number(t[2])];
+    const width = parseFloat(rect.getAttribute("width") || "0");
+    const height = parseFloat(rect.getAttribute("height") || "0");
+    if (width > 0 && height > 0) {
+      cards.push({ node, rect, pos, width, height });
+    }
+  }
+  cards.sort((a, b) => a.pos[axis2] - b.pos[axis2]);
+  const layers = [];
+  let currentLayer = [];
+  let lastCoord = -Infinity;
+  for (const card of cards) {
+    if (Math.abs(card.pos[axis2] - lastCoord) <= 15) {
+      currentLayer.push(card);
+    } else {
+      if (currentLayer.length > 1) layers.push(currentLayer);
+      currentLayer = [card];
+      lastCoord = card.pos[axis2];
+    }
+  }
+  if (currentLayer.length > 1) layers.push(currentLayer);
+  for (const layer of layers) {
+    const maxWidth = Math.max(...layer.map((c) => c.width));
+    for (const card of layer) {
+      const diff = maxWidth - card.width;
+      if (diff > 1 && diff <= 140) {
+        card.rect.setAttribute("width", String(maxWidth));
+        card.rect.setAttribute("x", String(-maxWidth / 2));
+      }
+    }
+  }
 }
 function styleSvg(svg, direction, settings, palette, dark) {
   const compactLayout = settings.compactLayout !== false;
@@ -1052,58 +1131,38 @@ function styleSvg(svg, direction, settings, palette, dark) {
   for (const [source, levels] of outgoing) {
     if (levels.length > 1) branchLevels.set(source, sign > 0 ? Math.min(...levels) : Math.max(...levels));
   }
-  for (const path of compactLayout ? doc.querySelectorAll("path.flowchart-link, .edgePath path.path") : []) {
-    const d = path.getAttribute("d") || "";
-    const points = routePoints(d);
-    if (!points || points.length < 2) continue;
-    const edge = resolveEdge(doc, path);
-    let routed = null;
-    if (direction && edge) {
-      const from = nodeBounds(doc, edge[1]), to = nodeBounds(doc, edge[2]);
-      const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
-      if (!from || !to) continue;
-      const delta = to.center[axis] - from.center[axis];
-      if (Math.abs(delta) < 0.01) continue;
-      const travelSign = Math.sign(delta);
-      const pathOffset = transformOffset(path);
-      if (!pathOffset) continue;
-      points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
-      points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
-      const forward = sign * delta > 0;
-      if (forward) {
-        const sourceLimit = nodeLimit(doc, edge[1], direction, true) - pathOffset[axis];
-        const targetLimit = nodeLimit(doc, edge[2], direction, false) - pathOffset[axis];
-        routed = orthogonalPath(
-          points,
-          direction,
-          sourceLimit,
-          targetLimit,
-          branchLevels.has(edge[1]) ? branchLevels.get(edge[1]) - pathOffset[axis] : void 0
-        );
-      } else {
-        routed = returnLanePath(points, direction, from, to, pathOffset);
-      }
-      if (!routed) continue;
-    }
-    if (routed) {
-      const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
-      const a = route.length > 2 ? route[1] : route[0];
-      const b = route.length > 2 ? route[2] : route[1];
-      const offset = transformOffset(path) || [0, 0];
-      labelPositions.set(
-        path.getAttribute("data-id") || path.id,
-        [(a[0] + b[0]) / 2 + offset[0], (a[1] + b[1]) / 2 + offset[1]]
-      );
-      routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
-    }
-    path.setAttribute("d", routed ? roundPath(routed) : roundPath(d));
+  if (compactLayout) {
+    equalizeCardWidths(doc, direction);
   }
-  for (const label of doc.querySelectorAll(".edgeLabels > .edgeLabel")) {
-    const key = label.getAttribute("data-id") || label.querySelector("[data-id]")?.getAttribute("data-id");
-    const position2 = key ? labelPositions.get(key) : void 0;
-    const offset = transformOffset(label.parentNode);
-    if (position2 && offset) {
-      label.setAttribute("transform", `translate(${position2.map((value, ax) => value - offset[ax]).join(",")})`);
+  for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
+    const d = path.getAttribute("d") || "";
+    if (!d) continue;
+    const edge = resolveEdge(doc, path);
+    let handled = false;
+    if (compactLayout && direction && edge) {
+      const from = nodeBounds(doc, edge[1]);
+      const to = nodeBounds(doc, edge[2]);
+      const axis2 = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
+      if (from && to) {
+        const delta = to.center[axis2] - from.center[axis2];
+        const forward = sign * delta > 0;
+        if (!forward) {
+          const points = routePoints(d);
+          const pathOffset = transformOffset(path);
+          if (points && points.length >= 2 && pathOffset) {
+            const routed = returnLanePath(points, direction, from, to, pathOffset);
+            if (routed) {
+              const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
+              routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + pathOffset[ax])));
+              path.setAttribute("d", roundPath(routed, 8));
+              handled = true;
+            }
+          }
+        }
+      }
+    }
+    if (!handled) {
+      path.setAttribute("d", softenOrthogonalPath(d, 12));
     }
   }
   for (const node of doc.querySelectorAll("g.node")) {
@@ -1113,6 +1172,41 @@ function styleSvg(svg, direction, settings, palette, dark) {
       node.classList.add("mpe-decision");
       node.setAttribute("tabindex", "0");
     }
+  }
+  for (const label of doc.querySelectorAll(".edgeLabel")) {
+    for (const rect of label.querySelectorAll("rect")) {
+      const width = parseFloat(rect.getAttribute("width") || "0");
+      const height = parseFloat(rect.getAttribute("height") || "0");
+      if (width > 0 && height > 0) {
+        const padX = 8;
+        const padY = 4;
+        rect.setAttribute("x", String(parseFloat(rect.getAttribute("x") || "0") - padX));
+        rect.setAttribute("y", String(parseFloat(rect.getAttribute("y") || "0") - padY));
+        rect.setAttribute("width", String(width + padX * 2));
+        rect.setAttribute("height", String(height + padY * 2));
+        rect.setAttribute("rx", "5");
+        rect.setAttribute("ry", "5");
+        rect.setAttribute("fill", palette.label);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1px");
+        rect.style.opacity = "1";
+      }
+    }
+    for (const fo of label.querySelectorAll("foreignObject")) {
+      const width = parseFloat(fo.getAttribute("width") || "0");
+      const height = parseFloat(fo.getAttribute("height") || "0");
+      if (width > 0 && height > 0) {
+        fo.setAttribute("width", String(width + 24));
+        fo.setAttribute("height", String(height + 12));
+        fo.setAttribute("x", String(parseFloat(fo.getAttribute("x") || "0") - 12));
+        fo.setAttribute("y", String(parseFloat(fo.getAttribute("y") || "0") - 6));
+        fo.style.overflow = "visible";
+      }
+    }
+  }
+  const edgeLabelsGroup = doc.querySelector("g.edgeLabels");
+  if (edgeLabelsGroup && edgeLabelsGroup.parentElement) {
+    edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
   const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
@@ -1163,13 +1257,6 @@ function styleSvg(svg, direction, settings, palette, dark) {
     }
   }
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
-  for (const label of doc.querySelectorAll(".edgeLabel")) {
-    const rects = label.querySelectorAll("rect");
-    for (const rect of rects) {
-      rect.setAttribute("rx", "4");
-      rect.setAttribute("ry", "4");
-    }
-  }
   root.classList.add("mfe-enhanced", "mermaid-genie-diagram");
   root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
   root.style.setProperty("--mpe-highlight", palette.accent);
@@ -1473,12 +1560,12 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           fontSize: "15px"
         },
         flowchart: {
-          curve: "step",
-          nodeSpacing: 28,
-          rankSpacing: 26,
-          padding: 10,
-          diagramPadding: 4,
-          wrappingWidth: 160,
+          curve: "rounded",
+          nodeSpacing: 38,
+          rankSpacing: 54,
+          padding: 16,
+          diagramPadding: 8,
+          wrappingWidth: 260,
           useMaxWidth: false,
           htmlLabels: true
         }

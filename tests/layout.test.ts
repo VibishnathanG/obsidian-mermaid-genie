@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { orthogonalPath, roundPath, routePoints } from '../src/layout';
+import { orthogonalPath, roundPath, routePoints, equalizeCardWidths } from '../src/layout';
+import { softenOrthogonalPath } from '../src/rounded-path';
 
 describe('Layout & Connector Routing', () => {
   it('computes clean orthogonal paths between points', () => {
@@ -16,10 +17,23 @@ describe('Layout & Connector Routing', () => {
     assert.ok(rounded.includes('Q50,40'));
   });
 
+  it('softens orthogonal path corners without shifting endpoints', () => {
+    const raw = 'M0,0L95,0Q100,0 100,5L100,96';
+    const softened = softenOrthogonalPath(raw, 12);
+    assert.equal(softened, 'M0,0L88,0Q100,0 100,12L100,96');
+  });
+
   it('extracts route points from svg path string', () => {
     const d = 'M10,10L20,20Q30,30 40,40L50,50';
     const points = routePoints(d);
     assert.ok(points && points.length > 2);
     assert.deepEqual(points?.[0], [10, 10]);
+  });
+
+  it('equalizes card widths in the same layer without error', () => {
+    // Basic smoke check for DOM environment or simulated document
+    assert.doesNotThrow(() => {
+      equalizeCardWidths({ querySelectorAll: () => [] } as unknown as Element, 'TD');
+    });
   });
 });

@@ -1,5 +1,6 @@
 import type { PaletteData } from './colors';
 import { applyFlowchartColors } from './flowchart-colors';
+import { softenOrthogonalPath } from './rounded-path';
 import type { GenieSettings } from './settings';
 
 export type Direction = 'TD' | 'TB' | 'BT' | 'LR' | 'RL';
@@ -272,6 +273,67 @@ export function routePoints(d: string): Point[] | null {
     .filter((point, i, all) => !i || point.some((v, axis) => Math.abs(v - all[i - 1]![axis]!) > 0.001));
 }
 
+/** Equalizes the widths of rectangular cards in the same rank/layer for a clean, unified layout. */
+export function equalizeCardWidths(doc: Document | Element, direction: Direction | ''): void {
+  const isHorizontal = direction === 'LR' || direction === 'RL';
+  const axis = isHorizontal ? 0 : 1; // compare X for horizontal, Y for vertical
+
+  interface Card {
+    node: Element;
+    rect: SVGRectElement;
+    pos: [number, number];
+    width: number;
+    height: number;
+  }
+
+  const cards: Card[] = [];
+  for (const node of doc.querySelectorAll('g.node')) {
+    // Only equalize rectangular cards, not decision diamonds, circles, etc.
+    if (node.querySelector('polygon, circle, ellipse')) continue;
+    const rect = node.querySelector(':scope > .label-container, :scope > rect') as SVGRectElement | null;
+    if (!rect) continue;
+    const t = (node.getAttribute('transform') || '').match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+    if (!t) continue;
+    const pos: [number, number] = [Number(t[1]), Number(t[2])];
+    const width = parseFloat(rect.getAttribute('width') || '0');
+    const height = parseFloat(rect.getAttribute('height') || '0');
+    if (width > 0 && height > 0) {
+      cards.push({ node, rect, pos, width, height });
+    }
+  }
+
+  // Sort cards by their position on layout axis
+  cards.sort((a, b) => a.pos[axis] - b.pos[axis]);
+
+  // Group into layers with a 15px threshold
+  const layers: Card[][] = [];
+  let currentLayer: Card[] = [];
+  let lastCoord = -Infinity;
+
+  for (const card of cards) {
+    if (Math.abs(card.pos[axis] - lastCoord) <= 15) {
+      currentLayer.push(card);
+    } else {
+      if (currentLayer.length > 1) layers.push(currentLayer);
+      currentLayer = [card];
+      lastCoord = card.pos[axis];
+    }
+  }
+  if (currentLayer.length > 1) layers.push(currentLayer);
+
+  // Equalize widths in each layer
+  for (const layer of layers) {
+    const maxWidth = Math.max(...layer.map(c => c.width));
+    for (const card of layer) {
+      const diff = maxWidth - card.width;
+      if (diff > 1 && diff <= 140) {
+        card.rect.setAttribute('width', String(maxWidth));
+        card.rect.setAttribute('x', String(-maxWidth / 2));
+      }
+    }
+  }
+}
+
 /** Processes and enhances the Mermaid SVG diagram with layout alignment, coloring, and clean formatting. */
 export function styleSvg(
   svg: string,
@@ -377,61 +439,46 @@ export function styleSvg(
     if (levels.length > 1) branchLevels.set(source, sign > 0 ? Math.min(...levels) : Math.max(...levels));
   }
 
-  // Orthogonal connector routing and corner rounding
-  for (const path of compactLayout ? doc.querySelectorAll('path.flowchart-link, .edgePath path.path') : []) {
-    const d = path.getAttribute('d') || '';
-    const points = routePoints(d);
-    if (!points || points.length < 2) continue;
-    const edge = resolveEdge(doc, path);
-    let routed = null;
-    if (direction && edge) {
-      const from = nodeBounds(doc, edge[1]), to = nodeBounds(doc, edge[2]);
-      const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
-      if (!from || !to) continue;
-      const delta = to.center[axis] - from.center[axis];
-      if (Math.abs(delta) < 0.01) continue;
-      const travelSign = Math.sign(delta);
-      const pathOffset = transformOffset(path);
-      if (!pathOffset) continue;
-      points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]!) as Point;
-      points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]!) as Point;
-      const forward = sign * delta > 0;
-      if (forward) {
-        const sourceLimit = nodeLimit(doc, edge[1], direction, true)! - pathOffset[axis];
-        const targetLimit = nodeLimit(doc, edge[2], direction, false)! - pathOffset[axis];
-        routed = orthogonalPath(
-          points,
-          direction,
-          sourceLimit,
-          targetLimit,
-          branchLevels.has(edge[1]) ? branchLevels.get(edge[1])! - pathOffset[axis] : undefined
-        );
-      } else {
-        routed = returnLanePath(points, direction, from, to, pathOffset);
-      }
-      if (!routed) continue;
-    }
-    if (routed) {
-      const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
-      const a = route.length > 2 ? route[1]! : route[0]!;
-      const b = route.length > 2 ? route[2]! : route[1]!;
-      const offset = transformOffset(path) || [0, 0];
-      labelPositions.set(
-        path.getAttribute('data-id') || path.id,
-        [(a[0] + b[0]) / 2 + offset[0], (a[1] + b[1]) / 2 + offset[1]]
-      );
-      routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
-    }
-    path.setAttribute('d', routed ? roundPath(routed) : roundPath(d));
+  // Equalize card widths in the same rank/layer for neat, clean block alignment
+  if (compactLayout) {
+    equalizeCardWidths(doc, direction);
   }
 
-  // Update edge label positions with newly routed connectors
-  for (const label of doc.querySelectorAll('.edgeLabels > .edgeLabel')) {
-    const key = label.getAttribute('data-id') || label.querySelector('[data-id]')?.getAttribute('data-id');
-    const position = key ? labelPositions.get(key) : undefined;
-    const offset = transformOffset(label.parentNode);
-    if (position && offset) {
-      label.setAttribute('transform', `translate(${position.map((value, ax) => value - offset[ax]!).join(',')})`);
+  // Orthogonal connector routing and corner rounding
+  for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
+    const d = path.getAttribute('d') || '';
+    if (!d) continue;
+
+    const edge = resolveEdge(doc, path);
+    let handled = false;
+
+    // Handle return loops through outer lane if backwards
+    if (compactLayout && direction && edge) {
+      const from = nodeBounds(doc, edge[1]);
+      const to = nodeBounds(doc, edge[2]);
+      const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
+      if (from && to) {
+        const delta = to.center[axis] - from.center[axis];
+        const forward = sign * delta > 0;
+        if (!forward) {
+          const points = routePoints(d);
+          const pathOffset = transformOffset(path);
+          if (points && points.length >= 2 && pathOffset) {
+            const routed = returnLanePath(points, direction, from, to, pathOffset);
+            if (routed) {
+              const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
+              routeExtent.push(...route.map(pt => pt.map((value, ax) => value + pathOffset[ax]!) as Point));
+              path.setAttribute('d', roundPath(routed, 8));
+              handled = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!handled) {
+      // Soften orthogonal bends with rounded beziers without displacing label clearance
+      path.setAttribute('d', softenOrthogonalPath(d, 12));
     }
   }
 
@@ -443,6 +490,48 @@ export function styleSvg(
       node.classList.add('mpe-decision');
       node.setAttribute('tabindex', '0');
     }
+  }
+
+  // Format edge label badges so words over arrows are never blocked
+  for (const label of doc.querySelectorAll('.edgeLabel')) {
+    // 1. For SVG rects inside edgeLabel
+    for (const rect of label.querySelectorAll('rect')) {
+      const width = parseFloat(rect.getAttribute('width') || '0');
+      const height = parseFloat(rect.getAttribute('height') || '0');
+      if (width > 0 && height > 0) {
+        const padX = 8;
+        const padY = 4;
+        rect.setAttribute('x', String(parseFloat(rect.getAttribute('x') || '0') - padX));
+        rect.setAttribute('y', String(parseFloat(rect.getAttribute('y') || '0') - padY));
+        rect.setAttribute('width', String(width + padX * 2));
+        rect.setAttribute('height', String(height + padY * 2));
+        rect.setAttribute('rx', '5');
+        rect.setAttribute('ry', '5');
+        rect.setAttribute('fill', palette.label);
+        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('stroke-width', '1px');
+        rect.style.opacity = '1';
+      }
+    }
+
+    // 2. For HTML foreignObjects inside edgeLabel
+    for (const fo of label.querySelectorAll('foreignObject')) {
+      const width = parseFloat(fo.getAttribute('width') || '0');
+      const height = parseFloat(fo.getAttribute('height') || '0');
+      if (width > 0 && height > 0) {
+        fo.setAttribute('width', String(width + 24));
+        fo.setAttribute('height', String(height + 12));
+        fo.setAttribute('x', String(parseFloat(fo.getAttribute('x') || '0') - 12));
+        fo.setAttribute('y', String(parseFloat(fo.getAttribute('y') || '0') - 6));
+        fo.style.overflow = 'visible';
+      }
+    }
+  }
+
+  // Ensure edgeLabels group is on top of connector lines in SVG rendering order
+  const edgeLabelsGroup = doc.querySelector('g.edgeLabels');
+  if (edgeLabelsGroup && edgeLabelsGroup.parentElement) {
+    edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
 
   // Expand viewBox if outer return lanes or routes extend past original dimensions
@@ -504,15 +593,6 @@ export function styleSvg(
 
   // Apply colored flow blocks using graph group structure and palette
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
-
-  // Format edge label badges
-  for (const label of doc.querySelectorAll('.edgeLabel')) {
-    const rects = label.querySelectorAll('rect');
-    for (const rect of rects) {
-      rect.setAttribute('rx', '4');
-      rect.setAttribute('ry', '4');
-    }
-  }
 
   // Mark SVG as enhanced and set custom properties
   root.classList.add('mfe-enhanced', 'mermaid-genie-diagram');

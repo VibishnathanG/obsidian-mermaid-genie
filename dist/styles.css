@@ -124,30 +124,37 @@
   stroke: var(--mpe-line);
 }
 
-/* --- Edge Label Badges --- */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel rect {
-  fill: var(--mpe-label);
-  stroke: var(--mpe-border);
-  stroke-width: 1px;
-  rx: 4px;
-  ry: 4px;
-  opacity: 0.95;
-}
-
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.edgeLabel, .edgeLabel p) {
-  background-color: var(--mpe-label);
+/* --- Edge Label Badges (Never blocked or obscured by arrows) --- */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel {
   color: var(--mpe-text);
-  font-size: 13px;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel p {
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin: 0;
-  font-weight: 500;
-  line-height: 1.35;
-  border: 1px solid var(--mpe-border);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel span.edgeLabel,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel span,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel .label,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel p,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel div {
+  background-color: var(--mpe-label) !important;
+  color: var(--mpe-text) !important;
+  border: 1px solid var(--mpe-border) !important;
+  border-radius: 5px !important;
+  padding: 3px 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  display: inline-block !important;
+  opacity: 1 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel rect {
+  fill: var(--mpe-label) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1px !important;
+  rx: 5px !important;
+  ry: 5px !important;
+  opacity: 1 !important;
 }
 
 /* --- Smooth Ancestor Path Highlighting --- */
