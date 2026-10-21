@@ -14,7 +14,7 @@ export function flowchartSourceId(nodeId: string, diagramId = ''): string {
 
 /** Extracts nodes and edges from the rendered SVG to reconstruct the flowchart graph. */
 export function extractGraphFromSvg(doc: Document | Element): { nodes: FlowchartNode[]; edges: FlowchartEdge[] } {
-  const diagramId = (doc instanceof Document ? doc.documentElement : doc).getAttribute('id') ?? '';
+  const diagramId = ('documentElement' in doc ? (doc as Document).documentElement : doc).getAttribute('id') ?? '';
   const nodes: FlowchartNode[] = [];
   const edges: FlowchartEdge[] = [];
   const seenNodes = new Set<string>();
@@ -109,13 +109,24 @@ export function applyFlowchartColors(
 
     const clusterShapes = Array.from(cluster.querySelectorAll(':scope > rect, :scope > path')) as SVGElement[];
     for (const shape of clusterShapes) {
-      if (!shape.style.fill && clusterFill) {
-        shape.style.fill = clusterFill;
-        shape.style.fillOpacity = dark ? '0.22' : '0.35';
-      }
-      if (!shape.style.stroke && clusterBorder) {
-        shape.style.stroke = clusterBorder;
-        shape.style.strokeWidth = '1.2px';
+      if (shape.style) {
+        if (!shape.style.fill && clusterFill) {
+          shape.style.fill = clusterFill;
+          shape.style.fillOpacity = dark ? '0.22' : '0.35';
+        }
+        if (!shape.style.stroke && clusterBorder) {
+          shape.style.stroke = clusterBorder;
+          shape.style.strokeWidth = '1.2px';
+        }
+      } else {
+        if (clusterFill) {
+          shape.setAttribute('fill', clusterFill);
+          shape.setAttribute('fill-opacity', dark ? '0.22' : '0.35');
+        }
+        if (clusterBorder) {
+          shape.setAttribute('stroke', clusterBorder);
+          shape.setAttribute('stroke-width', '1.2px');
+        }
       }
     }
   }
@@ -136,34 +147,46 @@ export function applyFlowchartColors(
     const textColor = textOnFill(fill, palette.text, 4.5);
 
     // Set CSS custom properties on the node container
-    node.style.setProperty('--node-fill', fill);
-    node.style.setProperty('--node-border', border);
-    node.style.setProperty('--node-text', textColor);
+    if (node.style?.setProperty) {
+      node.style.setProperty('--node-fill', fill);
+      node.style.setProperty('--node-border', border);
+      node.style.setProperty('--node-text', textColor);
+    }
 
-    // Target the shape element inside the node
+    // Target only the primary outer shape of the node, never inner label rects
     const shapeElements = Array.from(node.querySelectorAll(':scope > .label-container, :scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path')) as SVGElement[];
-    const shapes: SVGElement[] = shapeElements.length > 0
+    const shapes: SVGElement[] = (shapeElements.length > 0
       ? shapeElements
-      : (Array.from(node.querySelectorAll('rect, polygon, circle, ellipse, path')) as SVGElement[]);
+      : (Array.from(node.querySelectorAll('rect, polygon, circle, ellipse, path')) as SVGElement[])
+    ).filter(shape => !shape.closest('.label, .nodeLabel, foreignObject') && !shape.classList.contains('arrowMarkerPath'));
 
     for (const shape of shapes) {
-      // Do not override author's explicit inline styling or stroke-only elements
-      if (shape.classList.contains('arrowMarkerPath')) continue;
-      if (!shape.style.fill && shape.getAttribute('fill') !== 'none') {
-        shape.style.fill = fill;
-      }
-      if (!shape.style.stroke) {
-        shape.style.stroke = border;
-        shape.style.strokeWidth = '1.25px';
+      if (shape.style) {
+        if (!shape.style.fill && shape.getAttribute('fill') !== 'none') {
+          shape.style.fill = fill;
+        }
+        if (!shape.style.stroke) {
+          shape.style.stroke = border;
+          shape.style.strokeWidth = '1.25px';
+        }
+      } else {
+        if (!shape.getAttribute('fill') && shape.getAttribute('fill') !== 'none') {
+          shape.setAttribute('fill', fill);
+        }
+        if (!shape.getAttribute('stroke')) {
+          shape.setAttribute('stroke', border);
+          shape.setAttribute('stroke-width', '1.25px');
+        }
       }
     }
 
     // Apply readable text color to labels
     for (const textEl of Array.from(node.querySelectorAll('.nodeLabel, .label text, text, .nodeLabel p, foreignObject div'))) {
-      if (textEl instanceof HTMLElement) {
-        textEl.style.color = textColor;
-      } else if (textEl instanceof SVGElement) {
-        textEl.style.fill = textColor;
+      if ('style' in textEl && (textEl as HTMLElement).style) {
+        (textEl as HTMLElement).style.color = textColor;
+        (textEl as SVGElement).style.fill = textColor;
+      } else if (textEl.setAttribute) {
+        textEl.setAttribute('fill', textColor);
       }
     }
   }

@@ -275,6 +275,10 @@ export function routePoints(d: string): Point[] | null {
 
 /** Equalizes the widths of rectangular cards in the same rank/layer for a clean, unified layout. */
 export function equalizeCardWidths(doc: Document | Element, direction: Direction | ''): void {
+  // Never equalize widths on vertical diagrams (TD/TB/BT) where sibling cards sit side-by-side horizontally,
+  // as expanding widths without moving their centers causes adjacent cards to collide horizontally.
+  if (!direction || /^(TD|TB|BT)$/.test(direction)) return;
+
   const isHorizontal = direction === 'LR' || direction === 'RL';
   const axis = isHorizontal ? 0 : 1; // compare X for horizontal, Y for vertical
 
@@ -321,12 +325,12 @@ export function equalizeCardWidths(doc: Document | Element, direction: Direction
   }
   if (currentLayer.length > 1) layers.push(currentLayer);
 
-  // Equalize widths in each layer
+  // Equalize widths in each layer (capped to prevent collision with next rank)
   for (const layer of layers) {
     const maxWidth = Math.max(...layer.map(c => c.width));
     for (const card of layer) {
       const diff = maxWidth - card.width;
-      if (diff > 1 && diff <= 140) {
+      if (diff > 1 && diff <= 60) {
         card.rect.setAttribute('width', String(maxWidth));
         card.rect.setAttribute('x', String(-maxWidth / 2));
       }
@@ -386,11 +390,14 @@ export function styleSvg(
     const hw = Math.max(...points.map(p => Math.abs(p[0]! - cx)));
     const hh = Math.max(...points.map(p => Math.abs(p[1]! - cy)));
     const label = node.querySelector('foreignObject');
+    const labelHeight = label ? Number(label.getAttribute('height')) : 0;
     const widthRatio = label ? Number(label.getAttribute('width')) / (2 * hw) : 1;
-    const needed = label && widthRatio < 0.99
-      ? Number(label.getAttribute('height')) / (2 * hh) / (0.99 - widthRatio) : 1;
-    const scale = Math.min(1, Math.max(0.76, needed));
-    polygon!.setAttribute('points', points.map(p => `${p[0]!},${cy + (p[1]! - cy) * scale}`).join(' '));
+    // Only apply gentle compaction when diamond has substantial excess vertical headroom (> 2x text height)
+    if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
+      const needed = Number(label.getAttribute('height')) / (2 * hh) / (0.99 - widthRatio);
+      const scale = Math.min(1, Math.max(0.90, needed));
+      polygon!.setAttribute('points', points.map(p => `${p[0]!},${cy + (p[1]! - cy) * scale}`).join(' '));
+    }
   }
 
   // Align decision branches leaving same condition
@@ -595,14 +602,16 @@ export function styleSvg(
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
 
   // Mark SVG as enhanced and set custom properties
-  root.classList.add('mfe-enhanced', 'mermaid-genie-diagram');
-  root.style.setProperty('--mpe-duration', `${settings.animationDuration ?? 450}ms`);
-  root.style.setProperty('--mpe-highlight', palette.accent);
-  root.style.setProperty('--mpe-line', palette.line);
-  root.style.setProperty('--mpe-border', palette.border);
-  root.style.setProperty('--mpe-node', palette.surface);
-  root.style.setProperty('--mpe-text', palette.text);
-  root.style.setProperty('--mpe-label', palette.label);
+  root.classList?.add?.('mfe-enhanced', 'mermaid-genie-diagram');
+  if (root.style?.setProperty) {
+    root.style.setProperty('--mpe-duration', `${settings.animationDuration ?? 450}ms`);
+    root.style.setProperty('--mpe-highlight', palette.accent);
+    root.style.setProperty('--mpe-line', palette.line);
+    root.style.setProperty('--mpe-border', palette.border);
+    root.style.setProperty('--mpe-node', palette.surface);
+    root.style.setProperty('--mpe-text', palette.text);
+    root.style.setProperty('--mpe-label', palette.label);
+  }
 
   return new XMLSerializer().serializeToString(doc.documentElement);
 }
@@ -630,15 +639,15 @@ export function wrapDecisions(source: string): string {
     context = canvas.getContext('2d');
   }
   if (!context) return source;
-  context.font = '15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  context.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif';
   return source.replace(/([\p{L}\p{N}_-]+)\{"([^"\n]+)"\}/gu, (whole: string, key: string, label: string): string => {
-    if (/[<>&`]/.test(label) || context.measureText(label).width <= 110) return whole;
+    if (/[<>&`]/.test(label) || context.measureText(label).width <= 140) return whole;
     const words = label.split(/\s+/);
     const lines: string[] = [];
     let line = '';
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (line && context.measureText(next).width > 110) {
+      if (line && context.measureText(next).width > 140) {
         lines.push(line);
         line = word;
       } else {

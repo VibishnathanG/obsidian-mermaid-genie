@@ -662,7 +662,7 @@ function flowchartSourceId(nodeId, diagramId = "") {
   return match?.[1] ?? localId;
 }
 function extractGraphFromSvg(doc) {
-  const diagramId = (doc instanceof Document ? doc.documentElement : doc).getAttribute("id") ?? "";
+  const diagramId = ("documentElement" in doc ? doc.documentElement : doc).getAttribute("id") ?? "";
   const nodes = [];
   const edges = [];
   const seenNodes = /* @__PURE__ */ new Set();
@@ -735,13 +735,24 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
     const clusterBorder = colorStyle === "multi" && borders.length > 0 ? borders[slot % borders.length] : palette.clusterBorder;
     const clusterShapes = Array.from(cluster.querySelectorAll(":scope > rect, :scope > path"));
     for (const shape of clusterShapes) {
-      if (!shape.style.fill && clusterFill) {
-        shape.style.fill = clusterFill;
-        shape.style.fillOpacity = dark ? "0.22" : "0.35";
-      }
-      if (!shape.style.stroke && clusterBorder) {
-        shape.style.stroke = clusterBorder;
-        shape.style.strokeWidth = "1.2px";
+      if (shape.style) {
+        if (!shape.style.fill && clusterFill) {
+          shape.style.fill = clusterFill;
+          shape.style.fillOpacity = dark ? "0.22" : "0.35";
+        }
+        if (!shape.style.stroke && clusterBorder) {
+          shape.style.stroke = clusterBorder;
+          shape.style.strokeWidth = "1.2px";
+        }
+      } else {
+        if (clusterFill) {
+          shape.setAttribute("fill", clusterFill);
+          shape.setAttribute("fill-opacity", dark ? "0.22" : "0.35");
+        }
+        if (clusterBorder) {
+          shape.setAttribute("stroke", clusterBorder);
+          shape.setAttribute("stroke-width", "1.2px");
+        }
       }
     }
   }
@@ -752,26 +763,38 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
     const fill = colorStyle === "multi" && fills.length > 0 ? fills[slot % fills.length] : palette.surface;
     const border = colorStyle === "multi" && borders.length > 0 ? borders[slot % borders.length] : palette.border;
     const textColor = textOnFill(fill, palette.text, 4.5);
-    node.style.setProperty("--node-fill", fill);
-    node.style.setProperty("--node-border", border);
-    node.style.setProperty("--node-text", textColor);
+    if (node.style?.setProperty) {
+      node.style.setProperty("--node-fill", fill);
+      node.style.setProperty("--node-border", border);
+      node.style.setProperty("--node-text", textColor);
+    }
     const shapeElements = Array.from(node.querySelectorAll(":scope > .label-container, :scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path"));
-    const shapes = shapeElements.length > 0 ? shapeElements : Array.from(node.querySelectorAll("rect, polygon, circle, ellipse, path"));
+    const shapes = (shapeElements.length > 0 ? shapeElements : Array.from(node.querySelectorAll("rect, polygon, circle, ellipse, path"))).filter((shape) => !shape.closest(".label, .nodeLabel, foreignObject") && !shape.classList.contains("arrowMarkerPath"));
     for (const shape of shapes) {
-      if (shape.classList.contains("arrowMarkerPath")) continue;
-      if (!shape.style.fill && shape.getAttribute("fill") !== "none") {
-        shape.style.fill = fill;
-      }
-      if (!shape.style.stroke) {
-        shape.style.stroke = border;
-        shape.style.strokeWidth = "1.25px";
+      if (shape.style) {
+        if (!shape.style.fill && shape.getAttribute("fill") !== "none") {
+          shape.style.fill = fill;
+        }
+        if (!shape.style.stroke) {
+          shape.style.stroke = border;
+          shape.style.strokeWidth = "1.25px";
+        }
+      } else {
+        if (!shape.getAttribute("fill") && shape.getAttribute("fill") !== "none") {
+          shape.setAttribute("fill", fill);
+        }
+        if (!shape.getAttribute("stroke")) {
+          shape.setAttribute("stroke", border);
+          shape.setAttribute("stroke-width", "1.25px");
+        }
       }
     }
     for (const textEl of Array.from(node.querySelectorAll(".nodeLabel, .label text, text, .nodeLabel p, foreignObject div"))) {
-      if (textEl instanceof HTMLElement) {
+      if ("style" in textEl && textEl.style) {
         textEl.style.color = textColor;
-      } else if (textEl instanceof SVGElement) {
         textEl.style.fill = textColor;
+      } else if (textEl.setAttribute) {
+        textEl.setAttribute("fill", textColor);
       }
     }
   }
@@ -1007,6 +1030,7 @@ function routePoints(d) {
   return matches.flatMap((m) => m[1] ? [[Number(m[2]), Number(m[3])]] : [[Number(m[4]), Number(m[5])], [Number(m[6]), Number(m[7])]]).filter((point, i, all) => !i || point.some((v, axis2) => Math.abs(v - all[i - 1][axis2]) > 1e-3));
 }
 function equalizeCardWidths(doc, direction) {
+  if (!direction || /^(TD|TB|BT)$/.test(direction)) return;
   const isHorizontal = direction === "LR" || direction === "RL";
   const axis2 = isHorizontal ? 0 : 1;
   const cards = [];
@@ -1041,7 +1065,7 @@ function equalizeCardWidths(doc, direction) {
     const maxWidth = Math.max(...layer.map((c) => c.width));
     for (const card of layer) {
       const diff = maxWidth - card.width;
-      if (diff > 1 && diff <= 140) {
+      if (diff > 1 && diff <= 60) {
         card.rect.setAttribute("width", String(maxWidth));
         card.rect.setAttribute("x", String(-maxWidth / 2));
       }
@@ -1086,10 +1110,13 @@ function styleSvg(svg, direction, settings, palette, dark) {
     const hw = Math.max(...points.map((p) => Math.abs(p[0] - cx)));
     const hh = Math.max(...points.map((p) => Math.abs(p[1] - cy)));
     const label = node.querySelector("foreignObject");
+    const labelHeight = label ? Number(label.getAttribute("height")) : 0;
     const widthRatio = label ? Number(label.getAttribute("width")) / (2 * hw) : 1;
-    const needed = label && widthRatio < 0.99 ? Number(label.getAttribute("height")) / (2 * hh) / (0.99 - widthRatio) : 1;
-    const scale = Math.min(1, Math.max(0.76, needed));
-    polygon.setAttribute("points", points.map((p) => `${p[0]},${cy + (p[1] - cy) * scale}`).join(" "));
+    if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
+      const needed = Number(label.getAttribute("height")) / (2 * hh) / (0.99 - widthRatio);
+      const scale = Math.min(1, Math.max(0.9, needed));
+      polygon.setAttribute("points", points.map((p) => `${p[0]},${cy + (p[1] - cy) * scale}`).join(" "));
+    }
   }
   for (const source of compactLayout ? layoutNodes : []) {
     const targets = [...new Set(layoutEdges.filter((e) => e.from === source && layoutSign * (e.to.center[layoutAxis] - source.center[layoutAxis]) > 0).map((e) => e.to))];
@@ -1257,14 +1284,16 @@ function styleSvg(svg, direction, settings, palette, dark) {
     }
   }
   applyFlowchartColors(root, palette, dark, settings.colorStyle);
-  root.classList.add("mfe-enhanced", "mermaid-genie-diagram");
-  root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
-  root.style.setProperty("--mpe-highlight", palette.accent);
-  root.style.setProperty("--mpe-line", palette.line);
-  root.style.setProperty("--mpe-border", palette.border);
-  root.style.setProperty("--mpe-node", palette.surface);
-  root.style.setProperty("--mpe-text", palette.text);
-  root.style.setProperty("--mpe-label", palette.label);
+  root.classList?.add?.("mfe-enhanced", "mermaid-genie-diagram");
+  if (root.style?.setProperty) {
+    root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
+    root.style.setProperty("--mpe-highlight", palette.accent);
+    root.style.setProperty("--mpe-line", palette.line);
+    root.style.setProperty("--mpe-border", palette.border);
+    root.style.setProperty("--mpe-node", palette.surface);
+    root.style.setProperty("--mpe-text", palette.text);
+    root.style.setProperty("--mpe-label", palette.label);
+  }
   return new XMLSerializer().serializeToString(doc.documentElement);
 }
 function widenSingleRectangles(source, svg, direction) {
@@ -1288,15 +1317,15 @@ function wrapDecisions(source) {
     context = canvas.getContext("2d");
   }
   if (!context) return source;
-  context.font = '15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  context.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif';
   return source.replace(/([\p{L}\p{N}_-]+)\{"([^"\n]+)"\}/gu, (whole, key, label) => {
-    if (/[<>&`]/.test(label) || context.measureText(label).width <= 110) return whole;
+    if (/[<>&`]/.test(label) || context.measureText(label).width <= 140) return whole;
     const words = label.split(/\s+/);
     const lines = [];
     let line = "";
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (line && context.measureText(next).width > 110) {
+      if (line && context.measureText(next).width > 140) {
         lines.push(line);
         line = word;
       } else {
@@ -1546,9 +1575,10 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       const prefix = header ? header[0] : "";
       const configuredDefaults = {
         theme: dark ? "dark" : "base",
-        fontFamily: 'var(--font-text, var(--default-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif))',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
         themeVariables: {
           darkMode: dark,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
           background: dark ? palette.background : "#ffffff",
           primaryColor: palette.surface,
           primaryTextColor: palette.text,
@@ -1557,15 +1587,15 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           edgeLabelBackground: palette.label,
           clusterBkg: palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"),
           clusterBorder: palette.clusterBorder ?? palette.border,
-          fontSize: "15px"
+          fontSize: "14px"
         },
         flowchart: {
           curve: "rounded",
-          nodeSpacing: 38,
-          rankSpacing: 54,
+          nodeSpacing: 45,
+          rankSpacing: 50,
           padding: 16,
           diagramPadding: 8,
-          wrappingWidth: 260,
+          wrappingWidth: 240,
           useMaxWidth: false,
           htmlLabels: true
         }

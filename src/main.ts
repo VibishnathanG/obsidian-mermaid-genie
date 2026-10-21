@@ -123,9 +123,10 @@ export default class MermaidGeniePlugin extends Plugin {
 
       const configuredDefaults: MermaidConfig = {
         theme: dark ? 'dark' : 'base',
-        fontFamily: 'var(--font-text, var(--default-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif))',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
         themeVariables: {
           darkMode: dark,
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
           background: dark ? palette.background : '#ffffff',
           primaryColor: palette.surface,
           primaryTextColor: palette.text,
@@ -134,15 +135,15 @@ export default class MermaidGeniePlugin extends Plugin {
           edgeLabelBackground: palette.label,
           clusterBkg: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
           clusterBorder: palette.clusterBorder ?? palette.border,
-          fontSize: '15px',
+          fontSize: '14px',
         },
         flowchart: {
           curve: 'rounded',
-          nodeSpacing: 38,
-          rankSpacing: 54,
+          nodeSpacing: 45,
+          rankSpacing: 50,
           padding: 16,
           diagramPadding: 8,
-          wrappingWidth: 260,
+          wrappingWidth: 240,
           useMaxWidth: false,
           htmlLabels: true,
         },

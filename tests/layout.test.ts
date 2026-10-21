@@ -36,4 +36,18 @@ describe('Layout & Connector Routing', () => {
       equalizeCardWidths({ querySelectorAll: () => [] } as unknown as Element, 'TD');
     });
   });
+
+  it('skips card width equalization on vertical diagrams to prevent horizontal collisions', () => {
+    let queryCalled = false;
+    const fakeDoc = {
+      querySelectorAll: () => {
+        queryCalled = true;
+        return [];
+      },
+    } as unknown as Element;
+    equalizeCardWidths(fakeDoc, 'TD');
+    assert.equal(queryCalled, false, 'Should return immediately for TD without touching nodes');
+    equalizeCardWidths(fakeDoc, 'TB');
+    assert.equal(queryCalled, false, 'Should return immediately for TB without touching nodes');
+  });
 });

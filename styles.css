@@ -1,15 +1,25 @@
 /* Mermaid Genie: Enhanced Flowcharts with Coordinated Color Blocks, Aligned Branches, Path Highlighting & Crisp Typography */
 
 /* Reset Obsidian's dark-mode filter so colors and text never invert or blur */
+.mermaid:has(svg.mfe-enhanced) {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 8px 0 !important;
+  margin: 1rem auto !important;
+}
+
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style),
 .theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style),
 .theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) {
   filter: none !important;
-  margin-block: 14px;
-  margin-inline: 0;
+  margin-block: 12px;
+  margin-inline: auto !important;
   padding: 0;
   background: transparent;
-  overflow-x: auto;
+  overflow: visible !important;
   display: block;
   max-width: 100%;
   height: auto;
@@ -50,17 +60,32 @@
 }
 
 /* --- Node Shapes & Flow Blocks --- */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node :is(rect, circle, ellipse, polygon, path) {
+/* Prevent nested box artifacts inside nodes (e.g. subroutines, inner label backgrounds) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .label rect,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .nodeLabel rect,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node foreignObject rect {
+  fill: none !important;
+  stroke: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+/* Primary Node Shapes */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, circle, ellipse, polygon, path),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > .label-container,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node:not(:has(> .label-container)) :is(rect, circle, ellipse, polygon):not(.label *):not(.nodeLabel *) {
   fill: var(--node-fill, var(--mpe-node));
   stroke: var(--node-border, var(--mpe-border));
   stroke-width: 1.25px;
 }
 
-.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node :is(rect, polygon, circle, ellipse) {
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, polygon, circle, ellipse),
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > .label-container {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
 }
 
-.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node :is(rect, polygon, circle, ellipse) {
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, polygon, circle, ellipse),
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > .label-container {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.08));
 }
 
@@ -81,21 +106,35 @@
   color: var(--mpe-text);
 }
 
-/* --- Crisp, Clear Typography (Fixes text blurriness & distortion) --- */
+/* --- Crisp, Clear Typography without any Text Truncation --- */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) text,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .label {
-  font-family: var(--font-text, var(--default-font, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif)) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .label {
+/* Ensure SVG foreignObject and all text containers never clip or truncate words */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) foreignObject > div {
+  overflow: visible !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel {
   color: var(--node-text, var(--mpe-text));
+  overflow: visible !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text {
@@ -103,11 +142,12 @@
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel p {
-  line-height: 1.4 !important;
+  line-height: 1.35 !important;
   margin: 0 !important;
-  padding: 2px 4px;
+  padding: 0 !important;
   font-weight: 500;
   color: var(--node-text, var(--mpe-text));
+  overflow: visible !important;
 }
 
 /* --- Connectors & Edges --- */
@@ -127,25 +167,34 @@
 /* --- Edge Label Badges (Never blocked or obscured by arrows) --- */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel {
   color: var(--mpe-text);
+  overflow: visible !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel span.edgeLabel,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel span,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel .label,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel p,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel div {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel :is(span.edgeLabel, .label) {
   background-color: var(--mpe-label) !important;
   color: var(--mpe-text) !important;
   border: 1px solid var(--mpe-border) !important;
   border-radius: 5px !important;
-  padding: 3px 8px !important;
-  font-size: 12.5px !important;
+  padding: 2px 7px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
   line-height: 1.35 !important;
   white-space: nowrap !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
   display: inline-block !important;
   opacity: 1 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel p {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel rect {
