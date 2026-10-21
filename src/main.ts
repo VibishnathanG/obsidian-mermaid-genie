@@ -136,6 +136,116 @@ export default class MermaidGeniePlugin extends Plugin {
           clusterBkg: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
           clusterBorder: palette.clusterBorder ?? palette.border,
           fontSize: '14px',
+
+          // Sequence diagrams
+          actorBkg: palette.surface,
+          actorBorder: palette.border,
+          actorTextColor: palette.text,
+          actorLineColor: palette.line,
+          signalColor: palette.line,
+          signalTextColor: palette.text,
+          labelBoxBkgColor: palette.label,
+          labelBoxBorderColor: palette.border,
+          labelTextColor: palette.text,
+          loopTextColor: palette.text,
+          noteBkgColor: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+          noteBorderColor: palette.border,
+          noteTextColor: palette.text,
+          activationBkgColor: palette.accent,
+
+          // Class diagrams
+          classText: palette.text,
+          classTitle: palette.text,
+          classBorder: palette.border,
+          classBkg: palette.surface,
+
+          // State diagrams
+          stateBkg: palette.surface,
+          stateBorder: palette.border,
+          labelColor: palette.text,
+          altBackground: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+          transitionColor: palette.line,
+          transitionLabelColor: palette.text,
+
+          // Entity Relationship diagrams
+          entityBkg: palette.surface,
+          entityBorder: palette.border,
+          entityTextColor: palette.text,
+          relationshipColor: palette.line,
+          relationshipLineColor: palette.line,
+          attributeBackgroundColorOdd: palette.surface,
+          attributeBackgroundColorEven: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+
+          // Gantt charts
+          taskBkgColor: palette.surface,
+          taskBorderColor: palette.border,
+          taskTextColor: palette.text,
+          taskTextLightColor: palette.text,
+          activeTaskBkgColor: palette.accent,
+          activeTaskBorderColor: palette.accent,
+          doneTaskBkgColor: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+          doneTaskBorderColor: palette.border,
+          gridColor: palette.border,
+          sectionBkgColor: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+          sectionBkgColor2: palette.background,
+          todayLineColor: palette.accent,
+
+          // Pie charts
+          ...(palette.fills.length >= 6 ? {
+            pie1: palette.fills[0],
+            pie2: palette.fills[1],
+            pie3: palette.fills[2],
+            pie4: palette.fills[3],
+            pie5: palette.fills[4],
+            pie6: palette.fills[5],
+          } : {}),
+          pieTitleTextColor: palette.text,
+          pieSectionTextColor: palette.text,
+          pieLegendTextColor: palette.text,
+          pieStrokeColor: palette.border,
+
+          // Git graphs
+          ...(palette.fills.length >= 6 ? {
+            git0: palette.fills[0],
+            git1: palette.fills[1],
+            git2: palette.fills[2],
+            git3: palette.fills[3],
+            git4: palette.fills[4],
+            git5: palette.fills[5],
+          } : {}),
+          gitCommitLabelColor: palette.text,
+          gitBranchLabel0: palette.text,
+          tagLabelBackground: palette.label,
+          tagLabelBorder: palette.border,
+
+          // Timelines
+          ...(palette.fills.length >= 6 ? {
+            cScale0: palette.fills[0],
+            cScale1: palette.fills[1],
+            cScale2: palette.fills[2],
+            cScale3: palette.fills[3],
+            cScale4: palette.fills[4],
+            cScale5: palette.fills[5],
+          } : {}),
+          cScaleLabel0: palette.text,
+
+          // User Journeys
+          ...(palette.fills.length >= 6 ? {
+            fillType0: palette.fills[0],
+            fillType1: palette.fills[1],
+            fillType2: palette.fills[2],
+            fillType3: palette.fills[3],
+            fillType4: palette.fills[4],
+            fillType5: palette.fills[5],
+          } : {}),
+          section0: palette.surface,
+          section1: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
+
+          // Requirement diagrams
+          reqTitleColor: palette.text,
+          reqLabelColor: palette.text,
+          reqBoxColor: palette.surface,
+          reqBorderColor: palette.border,
         },
         flowchart: {
           curve: 'step',
@@ -147,6 +257,13 @@ export default class MermaidGeniePlugin extends Plugin {
           wrappingWidth: 240,
           useMaxWidth: false,
           htmlLabels: true,
+        },
+        sequence: {
+          mirrorActors: false,
+          useMaxWidth: false,
+        },
+        gantt: {
+          useMaxWidth: false,
         },
       };
 

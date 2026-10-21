@@ -116,4 +116,18 @@ describe('Alignment & Layout Precision Tests', () => {
     assert.ok(enhanced.includes('transform="translate('), 'Edge labels should have valid transform positions');
     assert.ok(!enhanced.includes('translate(undefined'), 'Should not contain undefined or NaN in transforms');
   });
+
+  it('seamlessly enhances non-flowchart diagram types without crashing or parser errors', () => {
+    const sequenceSvg = `<svg id="seq" class="mermaid"><g class="actor"><rect class="actor" width="100" height="40"/><text class="actor">Alice</text></g></svg>`;
+    const enhancedSeq = styleSvg(sequenceSvg, '', DEFAULT_SETTINGS, palette, false);
+    assert.ok(enhancedSeq.includes('class="mermaid mfe-enhanced mermaid-genie-diagram"'));
+
+    const classSvg = `<svg id="cls" class="mermaid"><g class="classGroup"><rect width="120" height="60"/><text>Animal</text></g></svg>`;
+    const enhancedCls = styleSvg(classSvg, '', DEFAULT_SETTINGS, palette, false);
+    assert.ok(enhancedCls.includes('class="mermaid mfe-enhanced mermaid-genie-diagram"'));
+
+    const pieSvg = `<svg id="pie" class="mermaid"><path class="pieCircle" d="M0,0 L10,10"/><text class="pieTitleText">Pets</text></svg>`;
+    const enhancedPie = styleSvg(pieSvg, '', DEFAULT_SETTINGS, palette, false);
+    assert.ok(enhancedPie.includes('class="mermaid mfe-enhanced mermaid-genie-diagram"'));
+  });
 });

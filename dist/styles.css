@@ -180,7 +180,8 @@
   stroke: var(--mpe-line);
 }
 
-/* Support for all Mermaid diagram types (Sequence, Class, State, ER) */
+/* --- Universal Support for All Mermaid Diagram Types --- */
+/* Sequence Diagrams */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(rect.actor, rect.actor-top, rect.actor-bottom, .labelBox) {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
@@ -197,21 +198,91 @@
   stroke-width: 1.35px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.messageText, .noteText, .loopText, .labelText) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.messageText, .noteText, .loopText, .labelText, .actor) {
   fill: var(--mpe-text) !important;
   color: var(--mpe-text) !important;
 }
 
+/* Class Diagrams */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .classGroup rect {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
   stroke-width: 1.25px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.stateGroup rect, .stateGroup circle) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .classGroup text {
+  fill: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .relation {
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.35px !important;
+}
+
+/* State Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.stateGroup rect, .stateGroup circle, .state-title) {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
   stroke-width: 1.25px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .transition {
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.35px !important;
+}
+
+/* Entity Relationship Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.er.entityBox, .entityBox) {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.25px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.er.relationshipLine, .relationshipLine) {
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.35px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.er.entityLabel, .er.relationshipLabel) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+/* Gantt Charts */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.grid .tick text, .sectionTitle, .taskText) {
+  fill: var(--mpe-text) !important;
+}
+
+/* Pie Charts */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pieTitleText {
+  fill: var(--mpe-text) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .legend text {
+  fill: var(--mpe-text) !important;
+}
+
+/* Git Graphs */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.commit-label, .branchLabel, .tag-label) {
+  fill: var(--mpe-text) !important;
+}
+
+/* XY Charts & Quadrants */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.xychart-title, .xychart-axis text, .quadrant-label) {
+  fill: var(--mpe-text) !important;
+}
+
+/* Requirement Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.reqTitle, .reqLabel, .reqText) {
+  fill: var(--mpe-text) !important;
+}
+
+/* C4 & Block Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container, .c4-person, .block) {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
 }
 
 /* --- Edge Label Badges (Never blocked or obscured by arrows) --- */
