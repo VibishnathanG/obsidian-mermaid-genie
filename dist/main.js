@@ -898,6 +898,24 @@ function resolveEdge(doc, path) {
   }
   return index.get(idPrefix) || null;
 }
+function orthogonalPath(points, direction, sourceLimit, targetLimit, branchLevel) {
+  const vertical = /^(TD|TB|BT)$/.test(direction);
+  const axis2 = vertical ? 1 : 0;
+  const cross = axis2 === 0 ? 1 : 0;
+  const first = points[0], last = points[points.length - 1];
+  if (!first || !last) return null;
+  const sign = Math.sign(last[axis2] - first[axis2]);
+  if (!sign) return null;
+  const a = sourceLimit ?? first[axis2], b = targetLimit ?? last[axis2];
+  if (sign * (b - a) <= 0) return null;
+  const level = branchLevel ?? (a + b) / 2;
+  const middle = sign * (level - a) > 0 && sign * (b - level) > 0 ? level : (a + b) / 2;
+  const p = [...first], q = [...last];
+  p[axis2] = middle;
+  q[axis2] = middle;
+  const route = Math.abs(first[cross] - last[cross]) < 0.01 ? [first, last] : [first, p, q, last];
+  return route.filter((pt, i) => !i || pt.some((v, j) => Math.abs(v - route[i - 1][j]) > 1e-3)).map((pt, i) => `${i ? "L" : "M"}${pt.join(",")}`).join("");
+}
 function transformOffset(element) {
   const offset = [0, 0];
   for (let el = element; el; el = el.parentNode) {
@@ -974,6 +992,15 @@ function nodeLimit(doc, key, direction, outgoing) {
   const axis2 = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
   const forward = !/^(BT|RL)$/.test(direction);
   return outgoing === forward ? bounds.max[axis2] : bounds.min[axis2];
+}
+function centerAnchor(bounds, direction, travelSign, outgoing) {
+  const axis2 = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
+  const cross = axis2 === 0 ? 1 : 0;
+  const sideSign = outgoing ? travelSign : -travelSign;
+  const anchor = [...bounds.center];
+  anchor[axis2] = sideSign > 0 ? bounds.max[axis2] : bounds.min[axis2];
+  anchor[cross] = bounds.center[cross];
+  return anchor;
 }
 function returnLanePath(points, direction, from, to, offset = [0, 0]) {
   const vertical = /^(TD|TB|BT)$/.test(direction);
@@ -1164,32 +1191,105 @@ function styleSvg(svg, direction, settings, palette, dark) {
   for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
     const d = path.getAttribute("d") || "";
     if (!d) continue;
+    const points = routePoints(d);
+    if (!points || points.length < 2) {
+      path.setAttribute("d", softenOrthogonalPath(d, 8));
+      continue;
+    }
     const edge = resolveEdge(doc, path);
-    let handled = false;
+    let routed = null;
     if (compactLayout && direction && edge) {
       const from = nodeBounds(doc, edge[1]);
       const to = nodeBounds(doc, edge[2]);
       const axis2 = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
       if (from && to) {
         const delta = to.center[axis2] - from.center[axis2];
-        const forward = sign * delta > 0;
-        if (!forward) {
-          const points = routePoints(d);
+        if (Math.abs(delta) >= 0.01) {
+          const travelSign = Math.sign(delta);
           const pathOffset = transformOffset(path);
-          if (points && points.length >= 2 && pathOffset) {
-            const routed = returnLanePath(points, direction, from, to, pathOffset);
-            if (routed) {
-              const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
-              routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + pathOffset[ax])));
-              path.setAttribute("d", roundPath(routed, 8));
-              handled = true;
+          if (pathOffset) {
+            points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
+            points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
+            const forward = sign * delta > 0;
+            if (forward) {
+              const sourceLimit = nodeLimit(doc, edge[1], direction, true) - pathOffset[axis2];
+              const targetLimit = nodeLimit(doc, edge[2], direction, false) - pathOffset[axis2];
+              routed = orthogonalPath(
+                points,
+                direction,
+                sourceLimit,
+                targetLimit,
+                branchLevels.has(edge[1]) ? branchLevels.get(edge[1]) - pathOffset[axis2] : void 0
+              );
+            } else {
+              routed = returnLanePath(points, direction, from, to, pathOffset);
             }
           }
         }
       }
     }
-    if (!handled) {
-      path.setAttribute("d", softenOrthogonalPath(d, 12));
+    if (routed) {
+      const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
+      const a = route.length > 2 ? route[1] : route[0];
+      const b = route.length > 2 ? route[2] : route[1];
+      const offset = transformOffset(path) || [0, 0];
+      if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
+        const edgeId = path.getAttribute("data-id") || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : "");
+        if (edgeId) {
+          labelPositions.set(edgeId, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1]
+          ]);
+        }
+        if (edge) {
+          labelPositions.set(`L_${edge[1]}_${edge[2]}_`, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1]
+          ]);
+          labelPositions.set(`L-${edge[1]}-${edge[2]}-`, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1]
+          ]);
+        }
+      }
+      routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
+      path.setAttribute("d", roundPath(routed, 8));
+    } else {
+      path.setAttribute("d", roundPath(d, 8));
+    }
+  }
+  for (const label of doc.querySelectorAll(".edgeLabels > .edgeLabel, .edgeLabel")) {
+    const key = label.getAttribute("data-id") || label.querySelector("[data-id]")?.getAttribute("data-id") || label.id;
+    let position2 = key ? labelPositions.get(key) : void 0;
+    if (!position2 && key) {
+      for (const [posKey, pos] of labelPositions) {
+        if (posKey && (key.startsWith(posKey) || posKey.startsWith(key))) {
+          position2 = pos;
+          break;
+        }
+      }
+    }
+    const offset = transformOffset(label.parentNode);
+    if (position2 && Number.isFinite(position2[0]) && Number.isFinite(position2[1]) && offset && Number.isFinite(offset[0]) && Number.isFinite(offset[1])) {
+      label.setAttribute(
+        "transform",
+        `translate(${position2.map((value, ax) => value - offset[ax]).join(",")})`
+      );
+    }
+  }
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
+    marker.setAttribute("markerWidth", "8");
+    marker.setAttribute("markerHeight", "8");
+    marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refY", "5");
+    marker.setAttribute("orient", "auto");
+    const start = marker.id.endsWith("pointStart");
+    marker.setAttribute("refX", start ? "0" : "10");
+    const path = marker.querySelector("path");
+    if (path) {
+      path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
+      path.setAttribute("stroke-width", "0");
     }
   }
   for (const node of doc.querySelectorAll("g.node")) {
@@ -1216,7 +1316,8 @@ function styleSvg(svg, direction, settings, palette, dark) {
         rect.setAttribute("fill", palette.label);
         rect.setAttribute("stroke", palette.border);
         rect.setAttribute("stroke-width", "1px");
-        rect.style.opacity = "1";
+        if (rect.style) rect.style.opacity = "1";
+        else rect.setAttribute("opacity", "1");
       }
     }
     for (const fo of label.querySelectorAll("foreignObject")) {
@@ -1227,7 +1328,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
         fo.setAttribute("height", String(height + 12));
         fo.setAttribute("x", String(parseFloat(fo.getAttribute("x") || "0") - 12));
         fo.setAttribute("y", String(parseFloat(fo.getAttribute("y") || "0") - 6));
-        fo.style.overflow = "visible";
+        if (fo.style) fo.style.overflow = "visible";
       }
     }
   }
@@ -1590,11 +1691,12 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           fontSize: "14px"
         },
         flowchart: {
-          curve: "rounded",
+          curve: "step",
           nodeSpacing: 45,
           rankSpacing: 50,
           padding: 16,
-          diagramPadding: 8,
+          diagramPadding: 20,
+          subGraphTitleMargin: { top: 12, bottom: 16 },
           wrappingWidth: 240,
           useMaxWidth: false,
           htmlLabels: true

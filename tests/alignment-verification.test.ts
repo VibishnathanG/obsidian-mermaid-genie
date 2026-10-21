@@ -82,4 +82,38 @@ describe('Alignment & Layout Precision Tests', () => {
     // Words are not truncated
     assert.ok(!wrapped.includes('th binding'));
   });
+
+  it('routes forward branches with smooth rounded orthogonal paths and formats arrowhead markers', () => {
+    const rawSvg = `<svg id="test-svg" class="mermaid">
+      <defs>
+        <marker id="test_flowchart-pointEnd" class="marker flowchart"><path d="M 0 0 L 10 5 L 0 10 z"/></marker>
+      </defs>
+      <g id="flowchart-B-0" class="node default" transform="translate(140, 100)">
+        <polygon class="label-container" points="0,0 20,20 0,40 -20,20"/>
+      </g>
+      <g id="flowchart-C-1" class="node default" transform="translate(60, 200)">
+        <rect class="basic label-container" width="80" height="40" x="-40" y="-20"/>
+      </g>
+      <g id="flowchart-D-2" class="node default" transform="translate(220, 200)">
+        <rect class="basic label-container" width="80" height="40" x="-40" y="-20"/>
+      </g>
+      <g class="edgePaths">
+        <path id="L-B-C-0" class="flowchart-link" d="M140,120L100,120L100,160L60,160L60,180"/>
+        <path id="L-B-D-1" class="flowchart-link" d="M140,120L180,120L180,160L220,160L220,180"/>
+      </g>
+      <g class="edgeLabels">
+        <g class="edgeLabel" data-id="L-B-C-0"><g class="label"><foreignObject width="60" height="20"><div><span>System status</span></div></foreignObject></g></g>
+        <g class="edgeLabel" data-id="L-B-D-1"><g class="label"><foreignObject width="60" height="20"><div><span>Instance status</span></div></foreignObject></g></g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(rawSvg, 'TD', DEFAULT_SETTINGS, palette, false);
+    // Orthogonal paths should have rounded corners (Q commands)
+    assert.ok(enhanced.includes('Q'), 'Should contain quadratic bezier rounded corners');
+    // Arrowhead marker is formatted with crisp triangle
+    assert.ok(enhanced.includes('d="M0 0 L10 5 L0 10 Z"'), 'Marker should be formatted with crisp triangle');
+    // Edge labels are moved to midpoint of the bridges
+    assert.ok(enhanced.includes('transform="translate('), 'Edge labels should have valid transform positions');
+    assert.ok(!enhanced.includes('translate(undefined'), 'Should not contain undefined or NaN in transforms');
+  });
 });

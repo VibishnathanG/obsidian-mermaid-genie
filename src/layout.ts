@@ -456,36 +456,113 @@ export function styleSvg(
     const d = path.getAttribute('d') || '';
     if (!d) continue;
 
-    const edge = resolveEdge(doc, path);
-    let handled = false;
+    const points = routePoints(d);
+    if (!points || points.length < 2) {
+      path.setAttribute('d', softenOrthogonalPath(d, 8));
+      continue;
+    }
 
-    // Handle return loops through outer lane if backwards
+    const edge = resolveEdge(doc, path);
+    let routed: string | null = null;
+
     if (compactLayout && direction && edge) {
       const from = nodeBounds(doc, edge[1]);
       const to = nodeBounds(doc, edge[2]);
       const axis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
       if (from && to) {
         const delta = to.center[axis] - from.center[axis];
-        const forward = sign * delta > 0;
-        if (!forward) {
-          const points = routePoints(d);
+        if (Math.abs(delta) >= 0.01) {
+          const travelSign = Math.sign(delta);
           const pathOffset = transformOffset(path);
-          if (points && points.length >= 2 && pathOffset) {
-            const routed = returnLanePath(points, direction, from, to, pathOffset);
-            if (routed) {
-              const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
-              routeExtent.push(...route.map(pt => pt.map((value, ax) => value + pathOffset[ax]!) as Point));
-              path.setAttribute('d', roundPath(routed, 8));
-              handled = true;
+          if (pathOffset) {
+            points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]) as Point;
+            points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]) as Point;
+            const forward = sign * delta > 0;
+            if (forward) {
+              const sourceLimit = nodeLimit(doc, edge[1], direction, true)! - pathOffset[axis];
+              const targetLimit = nodeLimit(doc, edge[2], direction, false)! - pathOffset[axis];
+              routed = orthogonalPath(
+                points,
+                direction,
+                sourceLimit,
+                targetLimit,
+                branchLevels.has(edge[1]) ? branchLevels.get(edge[1])! - pathOffset[axis] : undefined
+              );
+            } else {
+              // Keep Mermaid's outer return lane and remove small stairs
+              routed = returnLanePath(points, direction, from, to, pathOffset);
             }
           }
         }
       }
     }
 
-    if (!handled) {
-      // Soften orthogonal bends with rounded beziers without displacing label clearance
-      path.setAttribute('d', softenOrthogonalPath(d, 12));
+    if (routed) {
+      const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
+      const a = route.length > 2 ? route[1] : route[0];
+      const b = route.length > 2 ? route[2] : route[1];
+      const offset = transformOffset(path) || [0, 0];
+      if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
+        const edgeId = path.getAttribute('data-id') || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : '');
+        if (edgeId) {
+          labelPositions.set(edgeId, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1],
+          ]);
+        }
+        if (edge) {
+          labelPositions.set(`L_${edge[1]}_${edge[2]}_`, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1],
+          ]);
+          labelPositions.set(`L-${edge[1]}-${edge[2]}-`, [
+            (a[0] + b[0]) / 2 + offset[0],
+            (a[1] + b[1]) / 2 + offset[1],
+          ]);
+        }
+      }
+      routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
+      path.setAttribute('d', roundPath(routed, 8));
+    } else {
+      path.setAttribute('d', roundPath(d, 8));
+    }
+  }
+
+  // Move edge labels with our routed paths so they align cleanly on the connector bridges
+  for (const label of doc.querySelectorAll('.edgeLabels > .edgeLabel, .edgeLabel')) {
+    const key = label.getAttribute('data-id') || label.querySelector('[data-id]')?.getAttribute('data-id') || label.id;
+    let position = key ? labelPositions.get(key) : undefined;
+    if (!position && key) {
+      for (const [posKey, pos] of labelPositions) {
+        if (posKey && (key.startsWith(posKey) || posKey.startsWith(key))) {
+          position = pos;
+          break;
+        }
+      }
+    }
+    const offset = transformOffset(label.parentNode);
+    if (position && Number.isFinite(position[0]) && Number.isFinite(position[1]) && offset && Number.isFinite(offset[0]) && Number.isFinite(offset[1])) {
+      label.setAttribute(
+        'transform',
+        `translate(${position.map((value, ax) => value - offset[ax]!).join(',')})`
+      );
+    }
+  }
+
+  // Broad filled triangles, independent of connector stroke width
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', '8');
+    marker.setAttribute('markerHeight', '8');
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refY', '5');
+    marker.setAttribute('orient', 'auto');
+    const start = marker.id.endsWith('pointStart');
+    marker.setAttribute('refX', start ? '0' : '10');
+    const path = marker.querySelector('path');
+    if (path) {
+      path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
+      path.setAttribute('stroke-width', '0');
     }
   }
 
@@ -517,7 +594,8 @@ export function styleSvg(
         rect.setAttribute('fill', palette.label);
         rect.setAttribute('stroke', palette.border);
         rect.setAttribute('stroke-width', '1px');
-        rect.style.opacity = '1';
+        if (rect.style) rect.style.opacity = '1';
+        else rect.setAttribute('opacity', '1');
       }
     }
 
@@ -530,7 +608,7 @@ export function styleSvg(
         fo.setAttribute('height', String(height + 12));
         fo.setAttribute('x', String(parseFloat(fo.getAttribute('x') || '0') - 12));
         fo.setAttribute('y', String(parseFloat(fo.getAttribute('y') || '0') - 6));
-        fo.style.overflow = 'visible';
+        if (fo.style) fo.style.overflow = 'visible';
       }
     }
   }

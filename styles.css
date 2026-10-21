@@ -100,10 +100,18 @@
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label text,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label span {
-  font-weight: 600;
-  fill: var(--mpe-text);
-  color: var(--mpe-text);
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label span,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label .nodeLabel {
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  white-space: nowrap !important;
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label foreignObject > div {
+  white-space: nowrap !important;
+  overflow: visible !important;
 }
 
 /* --- Crisp, Clear Typography without any Text Truncation --- */
@@ -123,25 +131,33 @@
   overflow: visible !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) foreignObject > div {
+/* Node Labels: Perfect Horizontal & Vertical Centering */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node foreignObject > div {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+  height: 100% !important;
   overflow: visible !important;
-  width: max-content !important;
-  min-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .nodeLabel {
+  display: inline-block !important;
+  text-align: center !important;
   color: var(--node-text, var(--mpe-text));
   overflow: visible !important;
-  white-space: normal !important;
-  word-break: normal !important;
-  overflow-wrap: normal !important;
+  line-height: 1.35 !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text {
   fill: var(--node-text, var(--mpe-text));
+  text-anchor: middle !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel p {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .nodeLabel p {
+  text-align: center !important;
   line-height: 1.35 !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -153,7 +169,7 @@
 /* --- Connectors & Edges --- */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.flowchart-link, .edgePath .path) {
   stroke: var(--mpe-line);
-  stroke-width: 1.35px;
+  stroke-width: 1.5px;
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
@@ -162,6 +178,40 @@
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon) {
   fill: var(--mpe-line);
   stroke: var(--mpe-line);
+}
+
+/* Support for all Mermaid diagram types (Sequence, Class, State, ER) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(rect.actor, rect.actor-top, rect.actor-bottom, .labelBox) {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.25px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) rect.note {
+  fill: var(--mpe-group) !important;
+  stroke: var(--mpe-group-border) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.actor-line, .loopLine, .messageLine0, .messageLine1) {
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.35px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.messageText, .noteText, .loopText, .labelText) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .classGroup rect {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.25px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.stateGroup rect, .stateGroup circle) {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.25px !important;
 }
 
 /* --- Edge Label Badges (Never blocked or obscured by arrows) --- */
