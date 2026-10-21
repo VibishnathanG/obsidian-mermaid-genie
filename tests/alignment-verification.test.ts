@@ -221,8 +221,9 @@ describe('Alignment & Layout Precision Tests', () => {
     const enhanced = styleSvg(stateSvg, '', DEFAULT_SETTINGS, palette, false);
     // Path d in state diagram is untouched by flowchart orthogonal router
     assert.ok(enhanced.includes(`d="${originalD}"`), 'Curved transition path in state diagram should remain untouched');
-    // Marker is formatted with crisp triangle and stroke-width 0
-    assert.ok(enhanced.includes('d="M0 0 L10 5 L0 10 Z"'), 'Marker should be formatted into crisp triangle');
+    // Marker is formatted with crisp triangle, correct refY=7 and stroke-width 0
+    assert.ok(enhanced.includes('d="M 9,2 L 19,7 L 9,12 Z"'), 'Marker should be formatted into crisp state triangle');
+    assert.ok(enhanced.includes('refY="7"'), 'Marker refY should remain centered at 7');
     assert.ok(enhanced.includes('stroke-width="0"'), 'Marker path stroke-width should be 0');
   });
 

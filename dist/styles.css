@@ -176,8 +176,17 @@
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon) {
-  fill: var(--mpe-line);
-  stroke: var(--mpe-line);
+  fill: var(--mpe-line) !important;
+  stroke: var(--mpe-line) !important;
+  stroke-width: 0 !important;
+}
+
+/* State Diagram barb markers */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="barbEnd"] path,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="stateDiagram"] path,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="statediagram"] path {
+  fill: var(--mpe-line) !important;
+  stroke: var(--mpe-line) !important;
   stroke-width: 0 !important;
 }
 
@@ -235,9 +244,10 @@
   stroke-width: 1.25px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .transition {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.transition, .edgePaths path.transition, .stateGroup .transition) {
   stroke: var(--mpe-line) !important;
-  stroke-width: 1.35px !important;
+  stroke-width: 1.5px !important;
+  fill: none !important;
 }
 
 /* Entity Relationship Diagrams */

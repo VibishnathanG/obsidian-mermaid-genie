@@ -799,21 +799,40 @@ export function styleSvg(
     );
   }
 
-  // Broad filled triangles, independent of connector stroke width
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
+  // 1. Flowchart arrow markers (pointEnd / pointStart)
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
     marker.setAttribute('markerUnits', 'userSpaceOnUse');
     marker.setAttribute('markerWidth', '8');
     marker.setAttribute('markerHeight', '8');
     marker.setAttribute('viewBox', '0 0 10 10');
     marker.setAttribute('refY', '5');
     marker.setAttribute('orient', 'auto');
-    const start = marker.id.endsWith('pointStart') || marker.id.includes('barbStart');
+    const start = marker.id.endsWith('pointStart');
     marker.setAttribute('refX', start ? '0' : '10');
     const path = marker.querySelector('path');
     if (path) {
       path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
       path.setAttribute('stroke-width', '0');
       path.setAttribute('fill', palette.line);
+    }
+  }
+
+  // 2. State diagram arrow markers (barbEnd / stateDiagram)
+  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
+    const isMargin = marker.id.includes('margin');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', '14');
+    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('viewBox', '0 0 20 14');
+    marker.setAttribute('refX', isMargin ? '17' : '19');
+    marker.setAttribute('refY', '7');
+    marker.setAttribute('orient', 'auto');
+    const path = marker.querySelector('path');
+    if (path) {
+      path.setAttribute('d', 'M 9,2 L 19,7 L 9,12 Z');
+      path.setAttribute('stroke-width', '0');
+      path.setAttribute('fill', palette.line);
+      path.setAttribute('stroke', palette.line);
     }
   }
 
@@ -910,24 +929,6 @@ export function styleSvg(
     path.setAttribute('data-mpe-from', edge[1]);
     path.setAttribute('data-mpe-to', edge[2]);
     path.setAttribute('data-mpe-forward', String(sign * (position(to) - position(from)) > 0));
-  }
-
-  // Clean triangular markers for connectors
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
-    marker.setAttribute('markerUnits', 'userSpaceOnUse');
-    marker.setAttribute('markerWidth', '8');
-    marker.setAttribute('markerHeight', '8');
-    marker.setAttribute('viewBox', '0 0 10 10');
-    marker.setAttribute('refY', '5');
-    marker.setAttribute('orient', 'auto');
-    const start = marker.id.endsWith('pointStart') || marker.id.includes('barbStart');
-    marker.setAttribute('refX', start ? '0' : '10');
-    const path = marker.querySelector('path');
-    if (path) {
-      path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
-      path.setAttribute('stroke-width', '0');
-      path.setAttribute('fill', palette.line);
-    }
   }
 
   // Apply corner rounding to rectangles

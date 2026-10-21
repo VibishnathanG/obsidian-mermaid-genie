@@ -1483,20 +1483,37 @@ function styleSvg(svg, direction, settings, palette, dark) {
       `translate(${item.x - offset[0]},${item.y - offset[1]})`
     );
   }
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
     marker.setAttribute("markerUnits", "userSpaceOnUse");
     marker.setAttribute("markerWidth", "8");
     marker.setAttribute("markerHeight", "8");
     marker.setAttribute("viewBox", "0 0 10 10");
     marker.setAttribute("refY", "5");
     marker.setAttribute("orient", "auto");
-    const start = marker.id.endsWith("pointStart") || marker.id.includes("barbStart");
+    const start = marker.id.endsWith("pointStart");
     marker.setAttribute("refX", start ? "0" : "10");
     const path = marker.querySelector("path");
     if (path) {
       path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
       path.setAttribute("stroke-width", "0");
       path.setAttribute("fill", palette.line);
+    }
+  }
+  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
+    const isMargin = marker.id.includes("margin");
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
+    marker.setAttribute("markerWidth", "14");
+    marker.setAttribute("markerHeight", "10");
+    marker.setAttribute("viewBox", "0 0 20 14");
+    marker.setAttribute("refX", isMargin ? "17" : "19");
+    marker.setAttribute("refY", "7");
+    marker.setAttribute("orient", "auto");
+    const path = marker.querySelector("path");
+    if (path) {
+      path.setAttribute("d", "M 9,2 L 19,7 L 9,12 Z");
+      path.setAttribute("stroke-width", "0");
+      path.setAttribute("fill", palette.line);
+      path.setAttribute("stroke", palette.line);
     }
   }
   for (const node of doc.querySelectorAll("g.node")) {
@@ -1577,22 +1594,6 @@ function styleSvg(svg, direction, settings, palette, dark) {
     path.setAttribute("data-mpe-from", edge[1]);
     path.setAttribute("data-mpe-to", edge[2]);
     path.setAttribute("data-mpe-forward", String(sign * (position(to) - position(from)) > 0));
-  }
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="statediagram"]')) {
-    marker.setAttribute("markerUnits", "userSpaceOnUse");
-    marker.setAttribute("markerWidth", "8");
-    marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("viewBox", "0 0 10 10");
-    marker.setAttribute("refY", "5");
-    marker.setAttribute("orient", "auto");
-    const start = marker.id.endsWith("pointStart") || marker.id.includes("barbStart");
-    marker.setAttribute("refX", start ? "0" : "10");
-    const path = marker.querySelector("path");
-    if (path) {
-      path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
-      path.setAttribute("stroke-width", "0");
-      path.setAttribute("fill", palette.line);
-    }
   }
   if (settings.nodeRadius > 0) {
     for (const rect of doc.querySelectorAll(".node rect:not(.labelBkg)")) {
