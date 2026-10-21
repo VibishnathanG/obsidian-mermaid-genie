@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const Module = require('node:module');
 
 try {
-  const { JSDOM } = require('/tmp/test-mermaid/node_modules/jsdom');
+  const { JSDOM } = require('jsdom');
   const dom = new JSDOM();
   globalThis.DOMParser = dom.window.DOMParser;
   globalThis.XMLSerializer = dom.window.XMLSerializer;

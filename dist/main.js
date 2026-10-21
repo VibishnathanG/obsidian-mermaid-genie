@@ -1834,6 +1834,8 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
   stopped = false;
   settings = { ...DEFAULT_SETTINGS };
   svgClipboard = new SvgClipboard(this.app);
+  renderCache = /* @__PURE__ */ new Map();
+  maxCacheSize = 150;
   fileExport = new DiagramFileExport(
     this.app,
     () => this.settings.exportFolder,
@@ -1882,16 +1884,24 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
     if (this.stopped) return;
     const original = mermaid.render;
     const getSettings = () => this.settings;
+    const cache = this.renderCache;
+    const maxCache = this.maxCacheSize;
     const wrapped = async function(id, source, ...args) {
       if (typeof source !== "string") return original.call(this, id, source, ...args);
       let text = source;
       if (/^\s*%%\s*(?:mg|mfe):off\s*$/m.test(text)) {
         return original.call(this, id, text, ...args);
       }
-      const directionMatch = text.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/m);
-      const direction = directionMatch?.[1];
       const currentSettings = getSettings();
       const dark = document.body.classList.contains("theme-dark");
+      const cacheKey = `${dark ? "1" : "0"}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        const currentIdSvg = cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
+        return typeof cached.raw === "string" ? currentIdSvg : { ...cached.raw, svg: currentIdSvg };
+      }
+      const directionMatch = text.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/m);
+      const direction = directionMatch?.[1];
       const palette = resolvePaletteData(
         currentSettings.colorStyle,
         currentSettings.multiPalette,
@@ -2107,7 +2117,13 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       try {
         const rawSvg = typeof result === "string" ? result : result.svg;
         const enhancedSvg = styleSvg(rawSvg, direction ?? "", currentSettings, palette, dark);
-        return typeof result === "string" ? enhancedSvg : { ...result, svg: enhancedSvg };
+        const finalResult = typeof result === "string" ? enhancedSvg : { ...result, svg: enhancedSvg };
+        if (cache.size >= maxCache) {
+          const oldestKey = cache.keys().next().value;
+          if (oldestKey) cache.delete(oldestKey);
+        }
+        cache.set(cacheKey, { svg: enhancedSvg, raw: result });
+        return finalResult;
       } catch (error) {
         console.warn("Mermaid Genie: kept original SVG after layout/styling failed", error);
         return result;
@@ -2154,9 +2170,11 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
     }
   }
   refreshDiagrams() {
+    this.renderCache.clear();
     this.app.workspace.trigger("post-processor-change");
   }
   async saveSettings() {
+    this.renderCache.clear();
     this.settings = normalizeSettings(this.settings);
     await this.saveData(this.settings);
     document.querySelectorAll("svg.mfe-enhanced").forEach((svg) => {
@@ -2168,6 +2186,7 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
   }
   onunload() {
     this.stopped = true;
+    this.renderCache.clear();
     this.svgClipboard.clear();
     this.fileExport.dispose();
     this.refreshDiagrams();

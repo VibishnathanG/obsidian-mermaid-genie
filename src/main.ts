@@ -29,6 +29,8 @@ export default class MermaidGeniePlugin extends Plugin {
   private stopped = false;
   settings: GenieSettings = { ...DEFAULT_SETTINGS };
   private svgClipboard = new SvgClipboard(this.app);
+  private renderCache = new Map<string, { svg: string; raw: string | RenderResult }>();
+  private maxCacheSize = 150;
   private fileExport = new DiagramFileExport(
     this.app,
     () => this.settings.exportFolder,
@@ -90,6 +92,8 @@ export default class MermaidGeniePlugin extends Plugin {
 
     const original = mermaid.render;
     const getSettings = () => this.settings;
+    const cache = this.renderCache;
+    const maxCache = this.maxCacheSize;
 
     const wrapped: MermaidRender = async function (id, source, ...args) {
       if (typeof source !== 'string') return original.call(this, id, source, ...args);
@@ -100,11 +104,22 @@ export default class MermaidGeniePlugin extends Plugin {
         return original.call(this, id, text, ...args);
       }
 
+      const currentSettings = getSettings();
+      const dark = document.body.classList.contains('theme-dark');
+
+      // Check in-memory render cache for immediate zero-latency load
+      const cacheKey = `${dark ? '1' : '0'}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        const currentIdSvg = cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
+        return typeof cached.raw === 'string'
+          ? currentIdSvg
+          : { ...cached.raw, svg: currentIdSvg };
+      }
+
       const directionMatch = text.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/m);
       const direction = directionMatch?.[1] as Direction | undefined;
 
-      const currentSettings = getSettings();
-      const dark = document.body.classList.contains('theme-dark');
       const palette = resolvePaletteData(
         currentSettings.colorStyle,
         currentSettings.multiPalette,
@@ -336,7 +351,16 @@ export default class MermaidGeniePlugin extends Plugin {
       try {
         const rawSvg = typeof result === 'string' ? result : result.svg;
         const enhancedSvg = styleSvg(rawSvg, direction ?? '', currentSettings, palette, dark);
-        return typeof result === 'string' ? enhancedSvg : { ...result, svg: enhancedSvg };
+        const finalResult = typeof result === 'string' ? enhancedSvg : { ...result, svg: enhancedSvg };
+
+        // Save in-memory cache to guarantee 0ms instant reload
+        if (cache.size >= maxCache) {
+          const oldestKey = cache.keys().next().value;
+          if (oldestKey) cache.delete(oldestKey);
+        }
+        cache.set(cacheKey, { svg: enhancedSvg, raw: result });
+
+        return finalResult;
       } catch (error) {
         console.warn('Mermaid Genie: kept original SVG after layout/styling failed', error);
         return result;
@@ -390,10 +414,12 @@ export default class MermaidGeniePlugin extends Plugin {
   }
 
   refreshDiagrams(): void {
+    this.renderCache.clear();
     this.app.workspace.trigger('post-processor-change');
   }
 
   async saveSettings(): Promise<void> {
+    this.renderCache.clear();
     this.settings = normalizeSettings(this.settings);
     await this.saveData(this.settings);
 
@@ -408,6 +434,7 @@ export default class MermaidGeniePlugin extends Plugin {
 
   onunload(): void {
     this.stopped = true;
+    this.renderCache.clear();
     this.svgClipboard.clear();
     this.fileExport.dispose();
     this.refreshDiagrams();
