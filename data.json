@@ -1,0 +1,12 @@
+{
+  "colorStyle": "multi",
+  "multiPalette": "clear",
+  "singlePalette": "slate",
+  "compactLayout": true,
+  "pathHighlight": true,
+  "animationDuration": 450,
+  "hoverDelay": 180,
+  "nodeRadius": 6,
+  "exportControls": true,
+  "exportFolder": ""
+}

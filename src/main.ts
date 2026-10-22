@@ -417,6 +417,18 @@ export default class MermaidGeniePlugin extends Plugin {
       callback: () => this.refreshDiagrams(),
     });
 
+    this.addCommand({
+      id: 'open-settings',
+      name: 'Open settings',
+      callback: () => {
+        const setting = (this.app as any).setting;
+        if (setting) {
+          setting.open?.();
+          setting.openTabById?.(this.manifest.id);
+        }
+      },
+    });
+
     const exportActions = [
       { id: 'copy-diagram-png', name: 'Copy diagram as PNG', action: 'copy' as const },
       { id: 'copy-diagram-svg', name: 'Copy diagram as SVG', action: 'copy-svg' as const },

@@ -7,7 +7,7 @@ const watch = process.argv.includes("--watch");
 
 async function copyToDist() {
   await fs.mkdir("dist", { recursive: true });
-  for (const file of ["main.js", "manifest.json", "styles.css", "mermaid-syntax-gallery.md"]) {
+  for (const file of ["main.js", "manifest.json", "styles.css", "data.json", "mermaid-syntax-gallery.md"]) {
     try {
       await fs.copyFile(file, path.join("dist", file));
     } catch (err) {

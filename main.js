@@ -2869,6 +2869,17 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       name: "Refresh diagrams",
       callback: () => this.refreshDiagrams()
     });
+    this.addCommand({
+      id: "open-settings",
+      name: "Open settings",
+      callback: () => {
+        const setting = this.app.setting;
+        if (setting) {
+          setting.open?.();
+          setting.openTabById?.(this.manifest.id);
+        }
+      }
+    });
     const exportActions = [
       { id: "copy-diagram-png", name: "Copy diagram as PNG", action: "copy" },
       { id: "copy-diagram-svg", name: "Copy diagram as SVG", action: "copy-svg" },
