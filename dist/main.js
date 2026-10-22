@@ -1350,15 +1350,18 @@ function fixSankeyCollisions(doc, palette, dark) {
   }
 }
 function fixC4RelationshipCollisions(doc, palette) {
+  const root = doc.documentElement;
+  const isC4 = root.classList.contains("c4Context") || root.classList.contains("c4Container") || root.classList.contains("c4Component") || root.classList.contains("c4Dynamic") || root.classList.contains("c4Deployment") || !!doc.querySelector(".c4-shape, .c4-person, .c4-system, .c4-boundary, .c4Context, .c4Container, .c4Component, g.relationship, .relationships, text.relationshipLabel");
+  if (!isC4) return;
   const relLabels = Array.from(
     doc.querySelectorAll(
-      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
+      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], .relationships text, text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
     )
-  );
+  ).filter((el) => !el.closest(".tick, .grid, .node, .c4-shape, .label-container, .task, .sectionTitle"));
   const labelItems = [];
   for (const el of relLabels) {
     if (el.getAttribute("data-c4-fixed") === "true") continue;
-    if (el.closest(".node, .c4-shape, .label-container")) continue;
+    if (el.closest(".tick, .grid, .node, .c4-shape, .label-container, .task, .sectionTitle")) continue;
     const rawX = el.getAttribute("x");
     const rawY = el.getAttribute("y");
     const x = parseFloat(rawX || "0");
@@ -1488,6 +1491,17 @@ function fixBlockDiagram(doc, palette, _dark) {
   const root = doc.documentElement;
   const isBlock = root.classList.contains("block-beta") || root.getAttribute("aria-roledescription") === "block" || !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
   if (!isBlock) return;
+  for (const shape of doc.querySelectorAll('svg[aria-roledescription="block"] :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path), .block-beta :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path), g.block :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path)')) {
+    if (shape.closest("marker, .label, .nodeLabel")) continue;
+    const currentStroke = shape.getAttribute("stroke");
+    if (currentStroke === "none" || shape.getAttribute("stroke-width") === "0") {
+      shape.setAttribute("fill", palette.surface);
+    } else {
+      shape.setAttribute("fill", palette.surface);
+      shape.setAttribute("stroke", palette.border);
+      shape.setAttribute("stroke-width", "1.5px");
+    }
+  }
   for (const text of doc.querySelectorAll('.block-beta text, svg[aria-roledescription="block"] text, g.block text, .block text, .block-beta .nodeLabel, svg[aria-roledescription="block"] .nodeLabel, .block .nodeLabel, .block-beta span, svg[aria-roledescription="block"] span, .block span, .block-beta p, svg[aria-roledescription="block"] p, .block p')) {
     text.setAttribute("fill", palette.text);
     if (text.style) {
@@ -1513,6 +1527,12 @@ function fixGanttChart(doc, palette, dark) {
     if (text.style) {
       text.style.color = palette.text;
       text.style.fill = palette.text;
+    }
+  }
+  for (const text of doc.querySelectorAll(".taskTextOutsideRight")) {
+    const x = parseFloat(text.getAttribute("x") || "0");
+    if (x > 0) {
+      text.setAttribute("x", String(x + 12));
     }
   }
 }
@@ -3162,6 +3182,11 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           useMaxWidth: false
         },
         gantt: {
+          leftPadding: 150,
+          rightPadding: 75,
+          topPadding: 50,
+          barHeight: 22,
+          barGap: 6,
           useMaxWidth: false
         },
         block: {

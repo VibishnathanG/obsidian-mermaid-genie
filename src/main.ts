@@ -366,6 +366,11 @@ export default class MermaidGeniePlugin extends Plugin {
           useMaxWidth: false,
         },
         gantt: {
+          leftPadding: 150,
+          rightPadding: 75,
+          topPadding: 50,
+          barHeight: 22,
+          barGap: 6,
           useMaxWidth: false,
         },
         block: {

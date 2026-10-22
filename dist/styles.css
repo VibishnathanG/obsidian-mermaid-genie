@@ -412,12 +412,18 @@
 }
 
 /* Block Diagrams (block-beta) */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) rect.basic {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path) {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
   stroke-width: 1.5px !important;
   rx: 6px !important;
   ry: 6px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) :is(.edgePath path, .edgePaths path, path.path) {
+  stroke: var(--mpe-line) !important;
+  stroke-width: 1.53px !important;
+  fill: none !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) rect.cluster {

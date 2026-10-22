@@ -627,17 +627,26 @@ export function fixSankeyCollisions(doc: Document, palette?: PaletteData, dark?:
  * a legible high-contrast background pill.
  */
 export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData): void {
+  const root = doc.documentElement;
+  const isC4 = root.classList.contains('c4Context') ||
+    root.classList.contains('c4Container') ||
+    root.classList.contains('c4Component') ||
+    root.classList.contains('c4Dynamic') ||
+    root.classList.contains('c4Deployment') ||
+    !!doc.querySelector('.c4-shape, .c4-person, .c4-system, .c4-boundary, .c4Context, .c4Container, .c4Component, g.relationship, .relationships, text.relationshipLabel');
+  if (!isC4) return;
+
   const relLabels = Array.from(
     doc.querySelectorAll(
-      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
+      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], .relationships text, text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
     )
-  );
+  ).filter(el => !el.closest('.tick, .grid, .node, .c4-shape, .label-container, .task, .sectionTitle'));
 
   const labelItems: Array<{ el: Element; x: number; y: number; width: number; height: number }> = [];
 
   for (const el of relLabels) {
     if (el.getAttribute('data-c4-fixed') === 'true') continue;
-    if (el.closest('.node, .c4-shape, .label-container')) continue;
+    if (el.closest('.tick, .grid, .node, .c4-shape, .label-container, .task, .sectionTitle')) continue;
 
     const rawX = el.getAttribute('x');
     const rawY = el.getAttribute('y');
@@ -799,6 +808,19 @@ export function fixBlockDiagram(doc: Document, palette: PaletteData, _dark: bool
     !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
   if (!isBlock) return;
 
+  // Enhance all block shapes (rects, cylinders, documents, asymmetric blocks)
+  for (const shape of doc.querySelectorAll('svg[aria-roledescription="block"] :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path), .block-beta :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path), g.block :is(rect.basic, path.basic, .basic path, .outer-path path, path.outer-path, .label-container path)')) {
+    if (shape.closest('marker, .label, .nodeLabel')) continue;
+    const currentStroke = shape.getAttribute('stroke');
+    if (currentStroke === 'none' || shape.getAttribute('stroke-width') === '0') {
+      shape.setAttribute('fill', palette.surface);
+    } else {
+      shape.setAttribute('fill', palette.surface);
+      shape.setAttribute('stroke', palette.border);
+      shape.setAttribute('stroke-width', '1.5px');
+    }
+  }
+
   for (const text of doc.querySelectorAll('.block-beta text, svg[aria-roledescription="block"] text, g.block text, .block text, .block-beta .nodeLabel, svg[aria-roledescription="block"] .nodeLabel, .block .nodeLabel, .block-beta span, svg[aria-roledescription="block"] span, .block span, .block-beta p, svg[aria-roledescription="block"] p, .block p')) {
     text.setAttribute('fill', palette.text);
     if ((text as HTMLElement).style) {
@@ -832,6 +854,14 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     if ((text as HTMLElement).style) {
       (text as HTMLElement).style.color = palette.text;
       (text as HTMLElement).style.fill = palette.text;
+    }
+  }
+
+  // Milestone labels (e.g. Public Community Release) - offset slightly past the milestone diamond
+  for (const text of doc.querySelectorAll('.taskTextOutsideRight')) {
+    const x = parseFloat(text.getAttribute('x') || '0');
+    if (x > 0) {
+      text.setAttribute('x', String(x + 12));
     }
   }
 }
