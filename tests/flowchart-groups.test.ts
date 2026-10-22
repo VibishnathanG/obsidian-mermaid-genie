@@ -60,4 +60,19 @@ describe('Flowchart Groups & Structural Colors', () => {
     assert.equal(colors.get('C'), colors.get('D'));
     assert.notEqual(colors.get('A'), colors.get('C'));
   });
+
+  it('assigns multi-color thematic palettes to parallel decision branches and choices', () => {
+    const links = [
+      'Start>Check',
+      'Check>M', 'Check>C', 'Check>R', 'Check>I', 'Check>P', 'Check>T',
+      'M>Final', 'C>Final', 'R>Final',
+      'Final>Graviton', 'Final>x86'
+    ];
+    const colors = graph(links);
+    // Distinct branches M, C, R, I, P, T have distinct color groups
+    const branchSlots = [colors.get('M'), colors.get('C'), colors.get('R'), colors.get('I'), colors.get('P'), colors.get('T')];
+    assert.ok(new Set(branchSlots).size >= 5, `Expected high color diversity for branches, got ${new Set(branchSlots).size}`);
+    // Terminal choices from Final have distinct groups
+    assert.notEqual(colors.get('Graviton'), colors.get('x86'));
+  });
 });

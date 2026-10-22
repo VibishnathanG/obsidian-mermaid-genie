@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { orthogonalPath, roundPath, routePoints, equalizeCardWidths } from '../src/layout';
+import { orthogonalPath, curvedConnectorPath, roundPath, routePoints, equalizeCardWidths } from '../src/layout';
 import { softenOrthogonalPath } from '../src/rounded-path';
 
 describe('Layout & Connector Routing', () => {
@@ -8,6 +8,12 @@ describe('Layout & Connector Routing', () => {
     const points: [number, number][] = [[10, 10], [50, 80]];
     const path = orthogonalPath(points, 'TD', 10, 80);
     assert.ok(path?.startsWith('M10,10L10,45L50,45L50,80'));
+  });
+
+  it('computes smooth bended curved paths for displaced connector anchors', () => {
+    const points: [number, number][] = [[10, 10], [50, 80]];
+    const path = curvedConnectorPath(points, 'TD', 10, 80);
+    assert.ok(path?.startsWith('M10,10Q10,45 30,45Q50,45 50,80'));
   });
 
   it('rounds orthogonal corners using quadratic beziers', () => {

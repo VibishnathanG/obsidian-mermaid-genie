@@ -104,6 +104,45 @@ export function orthogonalPath(
     .join('');
 }
 
+/** Computes smooth bended curved paths for flowchart connectors. */
+export function curvedConnectorPath(
+  points: Point[],
+  direction: Direction | '',
+  sourceLimit?: number,
+  targetLimit?: number
+): string | null {
+  const isVertical = /^(TD|TB|BT)$/.test(direction);
+  const axis = isVertical ? 1 : 0;
+  const cross = isVertical ? 0 : 1;
+  const first = points[0], last = points[points.length - 1];
+  if (!first || !last) return null;
+
+  const delta = last[axis] - first[axis];
+  const sign = Math.sign(delta);
+  if (!sign) return null;
+
+  const a = sourceLimit ?? first[axis];
+  const b = targetLimit ?? last[axis];
+  if (sign * (b - a) <= 0) return null;
+
+  const crossDist = Math.abs(last[cross] - first[cross]);
+
+  // Straight line if aligned on the cross axis
+  if (crossDist < 2) {
+    return `M${first.join(',')}L${last.join(',')}`;
+  }
+
+  // Smooth bended S-curve using quadratic Bezier arcs
+  const midAxis = (first[axis] + last[axis]) / 2;
+  const midCross = (first[cross] + last[cross]) / 2;
+
+  const midPoint: Point = isVertical ? [midCross, midAxis] : [midAxis, midCross];
+  const cp1: Point = isVertical ? [first[cross], midAxis] : [midAxis, first[cross]];
+  const cp2: Point = isVertical ? [last[cross], midAxis] : [midAxis, last[cross]];
+
+  return `M${first.join(',')}Q${cp1.join(',')} ${midPoint.join(',')}Q${cp2.join(',')} ${last.join(',')}`;
+}
+
 function transformOffset(element: Node | null): Point | undefined {
   const offset: Point = [0, 0];
   for (let el = element; el; el = el.parentNode) {
@@ -666,14 +705,13 @@ export function styleSvg(
       const d = path.getAttribute('d') || '';
       if (!d) continue;
 
-      const points = routePoints(d);
-      if (!points || points.length < 2) {
-        path.setAttribute('d', softenOrthogonalPath(d, 8));
-        continue;
-      }
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', palette.line);
+      path.setAttribute('stroke-width', '1.5px');
 
       const edge = resolveEdge(doc, path);
       let routed: string | null = null;
+      let points = routePoints(d);
 
       if (compactLayout && direction && edge) {
         const from = nodeBounds(doc, edge[1]);
@@ -684,13 +722,19 @@ export function styleSvg(
             const travelSign = Math.sign(delta);
             const pathOffset = transformOffset(path);
             if (pathOffset) {
-              points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]) as Point;
-              points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]) as Point;
+              const startAnchor: Point = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]) as Point;
+              const endAnchor: Point = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]) as Point;
+              points = [startAnchor, endAnchor];
               const forward = sign * delta > 0;
               if (forward) {
                 const sourceLimit = nodeLimit(doc, edge[1], direction, true)! - pathOffset[axis];
                 const targetLimit = nodeLimit(doc, edge[2], direction, false)! - pathOffset[axis];
-                routed = orthogonalPath(
+                routed = curvedConnectorPath(
+                  points,
+                  direction,
+                  sourceLimit,
+                  targetLimit
+                ) ?? orthogonalPath(
                   points,
                   direction,
                   sourceLimit,
@@ -706,10 +750,15 @@ export function styleSvg(
         }
       }
 
+      if (!points || points.length < 2) {
+        path.setAttribute('d', softenOrthogonalPath(d, 8));
+        continue;
+      }
+
       if (routed) {
         const route = [...routed.matchAll(segment)].map(m => [Number(m[2]), Number(m[3])]);
-        const a = route.length > 2 ? route[1] : route[0];
-        const b = route.length > 2 ? route[2] : route[1];
+        const a = route.length > 2 ? route[1] : (route[0] ?? points[0]);
+        const b = route.length > 2 ? route[2] : (route[1] ?? points[points.length - 1]);
         const offset = transformOffset(path) || [0, 0];
         if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
           const edgeId = path.getAttribute('data-id') || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : '');
@@ -727,11 +776,21 @@ export function styleSvg(
             if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
           }
         }
-        routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
-        path.setAttribute('d', roundPath(routed, 8));
+        if (route.length > 0) {
+          routeExtent.push(...route.map(pt => pt.map((value, ax) => value + offset[ax]!) as Point));
+        } else if (points.length >= 2) {
+          routeExtent.push(
+            [points[0]![0] + offset[0], points[0]![1] + offset[1]],
+            [points[points.length - 1]![0] + offset[0], points[points.length - 1]![1] + offset[1]]
+          );
+        }
+        path.setAttribute('d', routed.includes('C') || routed.includes('Q') ? routed : roundPath(routed, 14));
       } else {
-        path.setAttribute('d', roundPath(d, 8));
+        path.setAttribute('d', d.includes('C') || d.includes('Q') ? d : roundPath(d, 14));
       }
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', palette.line);
+      path.setAttribute('stroke-width', '1.5px');
     }
   }
 
@@ -818,22 +877,31 @@ export function styleSvg(
   }
 
   // 2. State diagram arrow markers (barbEnd / stateDiagram)
-  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
-    const isMargin = marker.id.includes('margin');
+  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbend"], marker[id*="barbStart"], marker[id*="barbstart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
+    const isStart = marker.id.toLowerCase().includes('barbstart');
+    const isMargin = marker.id.toLowerCase().includes('margin');
     marker.setAttribute('markerUnits', 'userSpaceOnUse');
     marker.setAttribute('markerWidth', '14');
     marker.setAttribute('markerHeight', '10');
     marker.setAttribute('viewBox', '0 0 20 14');
-    marker.setAttribute('refX', isMargin ? '17' : '19');
+    marker.setAttribute('refX', isStart ? '0' : (isMargin ? '17' : '19'));
     marker.setAttribute('refY', '7');
     marker.setAttribute('orient', 'auto');
+    marker.setAttribute('overflow', 'visible');
     const path = marker.querySelector('path');
     if (path) {
-      path.setAttribute('d', 'M 9,2 L 19,7 L 9,12 Z');
+      path.setAttribute('d', isStart ? 'M 19,2 L 9,7 L 19,12 Z' : 'M 9,2 L 19,7 L 9,12 Z');
       path.setAttribute('stroke-width', '0');
       path.setAttribute('fill', palette.line);
       path.setAttribute('stroke', palette.line);
     }
+  }
+
+  // Ensure state diagram transition connector paths have high-contrast lines and no fill
+  for (const path of doc.querySelectorAll('path.transition, .edgePaths path.transition, .stateGroup .transition')) {
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', palette.line);
+    path.setAttribute('stroke-width', '1.5px');
   }
 
   for (const node of doc.querySelectorAll('g.node')) {

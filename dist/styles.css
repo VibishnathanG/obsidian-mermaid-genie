@@ -175,6 +175,10 @@
   fill: none;
 }
 
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker {
+  overflow: visible !important;
+}
+
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon) {
   fill: var(--mpe-line) !important;
   stroke: var(--mpe-line) !important;
@@ -182,9 +186,9 @@
 }
 
 /* State Diagram barb markers */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="barbEnd"] path,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="stateDiagram"] path,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="statediagram"] path {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="barbEnd" i] path,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="stateDiagram" i] path,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker[id*="statediagram" i] path {
   fill: var(--mpe-line) !important;
   stroke: var(--mpe-line) !important;
   stroke-width: 0 !important;

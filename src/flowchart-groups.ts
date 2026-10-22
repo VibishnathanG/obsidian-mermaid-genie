@@ -17,6 +17,7 @@ export function flowchartGroups(nodes: readonly FlowchartNode[], edges: readonly
   const groups = new Map(nodes.map(node => [node.id, node.isGroup ? `group:${node.id}` : node.parentId ? `group:${node.parentId}` : `node:${node.id}`]));
   const neighbors = new Map(vertices.filter(node => !node.parentId).map(node => [node.id, new Set<string>()]));
   const outgoing = new Map([...neighbors.keys()].map(id => [id, new Set<string>()]));
+  const incoming = new Map([...neighbors.keys()].map(id => [id, new Set<string>()]));
 
   // Dotted references and invisible layout links must not fragment continuous chains.
   const solid = edges.filter(edge => edge.pattern !== 'dotted' && edge.pattern !== 'invisible');
@@ -25,28 +26,57 @@ export function flowchartGroups(nodes: readonly FlowchartNode[], edges: readonly
     neighbors.get(edge.start)!.add(edge.end);
     neighbors.get(edge.end)!.add(edge.start);
     outgoing.get(edge.start)!.add(edge.end);
-    if (edge.arrowTypeStart && edge.arrowTypeStart !== 'none') outgoing.get(edge.end)!.add(edge.start);
+    incoming.get(edge.end)!.add(edge.start);
+    if (edge.arrowTypeStart && edge.arrowTypeStart !== 'none') {
+      outgoing.get(edge.end)!.add(edge.start);
+      incoming.get(edge.start)!.add(edge.end);
+    }
   }
 
   const cuts = new Map<string, Set<string>>();
+  const addCut = (from: string, to: string) => {
+    if (!cuts.has(from)) cuts.set(from, new Set());
+    cuts.get(from)!.add(to);
+    if (!cuts.has(to)) cuts.set(to, new Set());
+    cuts.get(to)!.add(from);
+  };
+
+  // 1. Separate branches at decision forks and parallel paths
   for (const [start, targets] of outgoing) {
     if (targets.size < 2) continue;
     const branches: string[] = [];
     for (const end of targets) {
-      if (outgoing.get(end)!.has(start)) continue;
-      // Removing this edge must isolate a real branch. Reconverging paths stay together.
+      if (outgoing.get(end)?.has(start)) continue;
+      // Forward-only traversal along directed outgoing edges to prevent false cycles through join nodes
       const seen = new Set([end]), queue = [end];
-      for (let i = 0; i < queue.length && !seen.has(start); i++) {
+      for (let i = 0; i < queue.length; i++) {
         const current = queue[i]!;
-        for (const next of neighbors.get(current) ?? []) {
-          if (current === end && next === start) continue;
+        for (const next of outgoing.get(current) ?? []) {
           if (!seen.has(next)) { seen.add(next); queue.push(next); }
         }
       }
-      if (!seen.has(start) && seen.size >= 2) branches.push(end);
+      if (!seen.has(start)) {
+        if (seen.size >= 2 || targets.size > 2) {
+          branches.push(end);
+        }
+      }
     }
-    // A single leaf next to a continuing chain is too small to justify another color.
-    if (branches.length >= 2) cuts.set(start, new Set(branches));
+    const allLeaves = Array.from(targets).every(t => (outgoing.get(t)?.size ?? 0) === 0);
+    // When 2 or more distinct branches exist, or all parallel targets are choices/leaves
+    if (branches.length >= 2 || (targets.size > 2 && branches.length >= 1) || (allLeaves && targets.size >= 2)) {
+      for (const target of targets) {
+        addCut(start, target);
+      }
+    }
+  }
+
+  // 2. Separate reconverged paths at join nodes (in-degree >= 2)
+  for (const [node, sources] of incoming) {
+    if (sources.size >= 2) {
+      for (const src of sources) {
+        addCut(src, node);
+      }
+    }
   }
 
   const visited = new Set<string>();
@@ -67,16 +97,16 @@ export function flowchartGroups(nodes: readonly FlowchartNode[], edges: readonly
 
   // Assign a bounded set of color slots in stable graph order.
   const links = new Map([...new Set(groups.values())].sort().map(group => [group, new Set<string>()]));
-  const incoming = new Set<string>();
+  const groupIncoming = new Set<string>();
   for (const edge of solid) {
     const from = groups.get(edge.start), to = groups.get(edge.end);
     if (!from || !to || from === to) continue;
     links.get(from)?.add(to);
-    incoming.add(to);
+    groupIncoming.add(to);
   }
 
   const slots = new Map<string, number>();
-  const roots = [...links.keys()].filter(group => !incoming.has(group));
+  const roots = [...links.keys()].filter(group => !groupIncoming.has(group));
   for (const root of [...roots, ...links.keys()]) {
     if (slots.has(root)) continue;
     const queue = [root];

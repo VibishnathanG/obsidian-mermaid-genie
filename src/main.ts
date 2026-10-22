@@ -111,7 +111,11 @@ export default class MermaidGeniePlugin extends Plugin {
       const cacheKey = `${dark ? '1' : '0'}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
       const cached = cache.get(cacheKey);
       if (cached) {
-        const currentIdSvg = cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
+        const cachedIdMatch = cached.svg.match(/^<svg\s+id="([^"]*)"/);
+        const cachedId = cachedIdMatch?.[1];
+        const currentIdSvg = cachedId && cachedId !== id
+          ? cached.svg.split(cachedId).join(id)
+          : cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
         return typeof cached.raw === 'string'
           ? currentIdSvg
           : { ...cached.raw, svg: currentIdSvg };
@@ -317,7 +321,7 @@ export default class MermaidGeniePlugin extends Plugin {
           reqBorderColor: palette.border,
         },
         flowchart: {
-          curve: 'step',
+          curve: 'basis',
           nodeSpacing: computeDiagramSpacing(text, direction ?? 'TD').nodeSpacing,
           rankSpacing: computeDiagramSpacing(text, direction ?? 'TD').rankSpacing,
           padding: 16,

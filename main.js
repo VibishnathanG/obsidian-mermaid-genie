@@ -590,34 +590,60 @@ function flowchartGroups(nodes, edges) {
   const groups = new Map(nodes.map((node) => [node.id, node.isGroup ? `group:${node.id}` : node.parentId ? `group:${node.parentId}` : `node:${node.id}`]));
   const neighbors = new Map(vertices.filter((node) => !node.parentId).map((node) => [node.id, /* @__PURE__ */ new Set()]));
   const outgoing = new Map([...neighbors.keys()].map((id) => [id, /* @__PURE__ */ new Set()]));
+  const incoming = new Map([...neighbors.keys()].map((id) => [id, /* @__PURE__ */ new Set()]));
   const solid = edges.filter((edge) => edge.pattern !== "dotted" && edge.pattern !== "invisible");
   for (const edge of solid) {
     if (!neighbors.has(edge.start) || !neighbors.has(edge.end) || edge.start === edge.end) continue;
     neighbors.get(edge.start).add(edge.end);
     neighbors.get(edge.end).add(edge.start);
     outgoing.get(edge.start).add(edge.end);
-    if (edge.arrowTypeStart && edge.arrowTypeStart !== "none") outgoing.get(edge.end).add(edge.start);
+    incoming.get(edge.end).add(edge.start);
+    if (edge.arrowTypeStart && edge.arrowTypeStart !== "none") {
+      outgoing.get(edge.end).add(edge.start);
+      incoming.get(edge.start).add(edge.end);
+    }
   }
   const cuts = /* @__PURE__ */ new Map();
+  const addCut = (from, to) => {
+    if (!cuts.has(from)) cuts.set(from, /* @__PURE__ */ new Set());
+    cuts.get(from).add(to);
+    if (!cuts.has(to)) cuts.set(to, /* @__PURE__ */ new Set());
+    cuts.get(to).add(from);
+  };
   for (const [start, targets] of outgoing) {
     if (targets.size < 2) continue;
     const branches = [];
     for (const end of targets) {
-      if (outgoing.get(end).has(start)) continue;
+      if (outgoing.get(end)?.has(start)) continue;
       const seen = /* @__PURE__ */ new Set([end]), queue = [end];
-      for (let i = 0; i < queue.length && !seen.has(start); i++) {
+      for (let i = 0; i < queue.length; i++) {
         const current = queue[i];
-        for (const next of neighbors.get(current) ?? []) {
-          if (current === end && next === start) continue;
+        for (const next of outgoing.get(current) ?? []) {
           if (!seen.has(next)) {
             seen.add(next);
             queue.push(next);
           }
         }
       }
-      if (!seen.has(start) && seen.size >= 2) branches.push(end);
+      if (!seen.has(start)) {
+        if (seen.size >= 2 || targets.size > 2) {
+          branches.push(end);
+        }
+      }
     }
-    if (branches.length >= 2) cuts.set(start, new Set(branches));
+    const allLeaves = Array.from(targets).every((t) => (outgoing.get(t)?.size ?? 0) === 0);
+    if (branches.length >= 2 || targets.size > 2 && branches.length >= 1 || allLeaves && targets.size >= 2) {
+      for (const target of targets) {
+        addCut(start, target);
+      }
+    }
+  }
+  for (const [node, sources] of incoming) {
+    if (sources.size >= 2) {
+      for (const src of sources) {
+        addCut(src, node);
+      }
+    }
   }
   const visited = /* @__PURE__ */ new Set();
   for (const id of [...neighbors.keys()].sort()) {
@@ -635,15 +661,15 @@ function flowchartGroups(nodes, edges) {
     }
   }
   const links = new Map([...new Set(groups.values())].sort().map((group) => [group, /* @__PURE__ */ new Set()]));
-  const incoming = /* @__PURE__ */ new Set();
+  const groupIncoming = /* @__PURE__ */ new Set();
   for (const edge of solid) {
     const from = groups.get(edge.start), to = groups.get(edge.end);
     if (!from || !to || from === to) continue;
     links.get(from)?.add(to);
-    incoming.add(to);
+    groupIncoming.add(to);
   }
   const slots = /* @__PURE__ */ new Map();
-  const roots = [...links.keys()].filter((group) => !incoming.has(group));
+  const roots = [...links.keys()].filter((group) => !groupIncoming.has(group));
   for (const root of [...roots, ...links.keys()]) {
     if (slots.has(root)) continue;
     const queue = [root];
@@ -922,6 +948,29 @@ function orthogonalPath(points, direction, sourceLimit, targetLimit, branchLevel
   q[axis2] = middle;
   const route = Math.abs(first[cross] - last[cross]) < 0.01 ? [first, last] : [first, p, q, last];
   return route.filter((pt, i) => !i || pt.some((v, j) => Math.abs(v - route[i - 1][j]) > 1e-3)).map((pt, i) => `${i ? "L" : "M"}${pt.join(",")}`).join("");
+}
+function curvedConnectorPath(points, direction, sourceLimit, targetLimit) {
+  const isVertical = /^(TD|TB|BT)$/.test(direction);
+  const axis2 = isVertical ? 1 : 0;
+  const cross = isVertical ? 0 : 1;
+  const first = points[0], last = points[points.length - 1];
+  if (!first || !last) return null;
+  const delta = last[axis2] - first[axis2];
+  const sign = Math.sign(delta);
+  if (!sign) return null;
+  const a = sourceLimit ?? first[axis2];
+  const b = targetLimit ?? last[axis2];
+  if (sign * (b - a) <= 0) return null;
+  const crossDist = Math.abs(last[cross] - first[cross]);
+  if (crossDist < 2) {
+    return `M${first.join(",")}L${last.join(",")}`;
+  }
+  const midAxis = (first[axis2] + last[axis2]) / 2;
+  const midCross = (first[cross] + last[cross]) / 2;
+  const midPoint = isVertical ? [midCross, midAxis] : [midAxis, midCross];
+  const cp1 = isVertical ? [first[cross], midAxis] : [midAxis, first[cross]];
+  const cp2 = isVertical ? [last[cross], midAxis] : [midAxis, last[cross]];
+  return `M${first.join(",")}Q${cp1.join(",")} ${midPoint.join(",")}Q${cp2.join(",")} ${last.join(",")}`;
 }
 function transformOffset(element) {
   const offset = [0, 0];
@@ -1366,13 +1415,12 @@ function styleSvg(svg, direction, settings, palette, dark) {
     for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
       const d = path.getAttribute("d") || "";
       if (!d) continue;
-      const points = routePoints(d);
-      if (!points || points.length < 2) {
-        path.setAttribute("d", softenOrthogonalPath(d, 8));
-        continue;
-      }
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", palette.line);
+      path.setAttribute("stroke-width", "1.5px");
       const edge = resolveEdge(doc, path);
       let routed = null;
+      let points = routePoints(d);
       if (compactLayout && direction && edge) {
         const from = nodeBounds(doc, edge[1]);
         const to = nodeBounds(doc, edge[2]);
@@ -1382,13 +1430,19 @@ function styleSvg(svg, direction, settings, palette, dark) {
             const travelSign = Math.sign(delta);
             const pathOffset = transformOffset(path);
             if (pathOffset) {
-              points[0] = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
-              points[points.length - 1] = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
+              const startAnchor = centerAnchor(from, direction, travelSign, true).map((v, i) => v - pathOffset[i]);
+              const endAnchor = centerAnchor(to, direction, travelSign, false).map((v, i) => v - pathOffset[i]);
+              points = [startAnchor, endAnchor];
               const forward = sign * delta > 0;
               if (forward) {
                 const sourceLimit = nodeLimit(doc, edge[1], direction, true) - pathOffset[axis2];
                 const targetLimit = nodeLimit(doc, edge[2], direction, false) - pathOffset[axis2];
-                routed = orthogonalPath(
+                routed = curvedConnectorPath(
+                  points,
+                  direction,
+                  sourceLimit,
+                  targetLimit
+                ) ?? orthogonalPath(
                   points,
                   direction,
                   sourceLimit,
@@ -1402,10 +1456,14 @@ function styleSvg(svg, direction, settings, palette, dark) {
           }
         }
       }
+      if (!points || points.length < 2) {
+        path.setAttribute("d", softenOrthogonalPath(d, 8));
+        continue;
+      }
       if (routed) {
         const route = [...routed.matchAll(segment)].map((m) => [Number(m[2]), Number(m[3])]);
-        const a = route.length > 2 ? route[1] : route[0];
-        const b = route.length > 2 ? route[2] : route[1];
+        const a = route.length > 2 ? route[1] : route[0] ?? points[0];
+        const b = route.length > 2 ? route[2] : route[1] ?? points[points.length - 1];
         const offset = transformOffset(path) || [0, 0];
         if (a && b && Number.isFinite(a[0]) && Number.isFinite(b[0])) {
           const edgeId = path.getAttribute("data-id") || path.id || (edge ? `L_${edge[1]}_${edge[2]}_` : "");
@@ -1423,11 +1481,21 @@ function styleSvg(svg, direction, settings, palette, dark) {
             if (!labelPositions.has(hKey)) labelPositions.set(hKey, fallbackPos);
           }
         }
-        routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
-        path.setAttribute("d", roundPath(routed, 8));
+        if (route.length > 0) {
+          routeExtent.push(...route.map((pt) => pt.map((value, ax) => value + offset[ax])));
+        } else if (points.length >= 2) {
+          routeExtent.push(
+            [points[0][0] + offset[0], points[0][1] + offset[1]],
+            [points[points.length - 1][0] + offset[0], points[points.length - 1][1] + offset[1]]
+          );
+        }
+        path.setAttribute("d", routed.includes("C") || routed.includes("Q") ? routed : roundPath(routed, 14));
       } else {
-        path.setAttribute("d", roundPath(d, 8));
+        path.setAttribute("d", d.includes("C") || d.includes("Q") ? d : roundPath(d, 14));
       }
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", palette.line);
+      path.setAttribute("stroke-width", "1.5px");
     }
   }
   const placedLabels = [];
@@ -1499,22 +1567,29 @@ function styleSvg(svg, direction, settings, palette, dark) {
       path.setAttribute("fill", palette.line);
     }
   }
-  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbStart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
-    const isMargin = marker.id.includes("margin");
+  for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbend"], marker[id*="barbStart"], marker[id*="barbstart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
+    const isStart = marker.id.toLowerCase().includes("barbstart");
+    const isMargin = marker.id.toLowerCase().includes("margin");
     marker.setAttribute("markerUnits", "userSpaceOnUse");
     marker.setAttribute("markerWidth", "14");
     marker.setAttribute("markerHeight", "10");
     marker.setAttribute("viewBox", "0 0 20 14");
-    marker.setAttribute("refX", isMargin ? "17" : "19");
+    marker.setAttribute("refX", isStart ? "0" : isMargin ? "17" : "19");
     marker.setAttribute("refY", "7");
     marker.setAttribute("orient", "auto");
+    marker.setAttribute("overflow", "visible");
     const path = marker.querySelector("path");
     if (path) {
-      path.setAttribute("d", "M 9,2 L 19,7 L 9,12 Z");
+      path.setAttribute("d", isStart ? "M 19,2 L 9,7 L 19,12 Z" : "M 9,2 L 19,7 L 9,12 Z");
       path.setAttribute("stroke-width", "0");
       path.setAttribute("fill", palette.line);
       path.setAttribute("stroke", palette.line);
     }
+  }
+  for (const path of doc.querySelectorAll("path.transition, .edgePaths path.transition, .stateGroup .transition")) {
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", palette.line);
+    path.setAttribute("stroke-width", "1.5px");
   }
   for (const node of doc.querySelectorAll("g.node")) {
     const polygon = node.querySelector("polygon");
@@ -1898,7 +1973,9 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       const cacheKey = `${dark ? "1" : "0"}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
       const cached = cache.get(cacheKey);
       if (cached) {
-        const currentIdSvg = cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
+        const cachedIdMatch = cached.svg.match(/^<svg\s+id="([^"]*)"/);
+        const cachedId = cachedIdMatch?.[1];
+        const currentIdSvg = cachedId && cachedId !== id ? cached.svg.split(cachedId).join(id) : cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);
         return typeof cached.raw === "string" ? currentIdSvg : { ...cached.raw, svg: currentIdSvg };
       }
       const directionMatch = text.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/m);
@@ -2085,7 +2162,7 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           reqBorderColor: palette.border
         },
         flowchart: {
-          curve: "step",
+          curve: "basis",
           nodeSpacing: computeDiagramSpacing(text, direction ?? "TD").nodeSpacing,
           rankSpacing: computeDiagramSpacing(text, direction ?? "TD").rankSpacing,
           padding: 16,
