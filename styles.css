@@ -297,28 +297,110 @@
   fill: var(--mpe-text) !important;
 }
 
-/* Requirement Diagrams */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.reqTitle, .reqLabel, .reqText) {
-  fill: var(--mpe-text) !important;
-}
-
-/* C4 Architecture & Block Diagrams */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container, .c4-person, .c4-boundary, .c4-system, .block) {
+/* Requirement Diagrams (SysML) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.reqBox, .requirementDiagram g.node rect, .requirementDiagram rect.basic, .requirementDiagram path.outer-path) {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
+  stroke-width: 1.5px !important;
+  rx: 8px !important;
+  ry: 8px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container text, .c4-person text, .c4-boundary text, .c4-system text) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.reqTitle, .reqLabel, .reqText, .requirementDiagram .nodeLabel text, .requirementDiagram .nodeLabel span, .requirementDiagram .nodeLabel div, .requirementDiagram .nodeLabel p) {
   fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.relationshipLine, .relation, .line, line[stroke="#444444"], path[stroke="#444444"], line[stroke="#444"], path[stroke="#444"]) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.req-title-line, .requirementDiagram line) {
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.reqLabelBox, .requirementDiagram .labelBkg, .requirementDiagram .edgeLabels rect) {
+  fill: var(--mpe-label) !important;
+  stroke: var(--mpe-border) !important;
+  rx: 5px !important;
+  ry: 5px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.requirementDiagram .edgeLabels text, .requirementDiagram .edgeLabel text) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+  font-weight: 500 !important;
+}
+
+/* C4 Architecture Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container, .c4-person, .c4-boundary, .c4-system, .person, .system, .system_ext) rect {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.5px !important;
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.c4-container text, .c4-person text, .c4-boundary text, .c4-system text, .person text, .system text, .system_ext text) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.relationshipLine, .relation, .line, path[class*="relationship"], line[stroke="#444444"], path[stroke="#444444"], line[stroke="#444"], path[stroke="#444"]) {
   stroke: var(--mpe-line) !important;
+  stroke-width: 1.5px !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.relationshipLabel, .relation-label, .relationship-label, text[fill="#444444"], text[fill="#444"]) {
   fill: var(--mpe-text) !important;
   color: var(--mpe-text) !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) rect.c4-rel-pill {
+  fill: var(--mpe-label) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1px !important;
+  rx: 4px !important;
+  ry: 4px !important;
+}
+
+/* Sankey Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  paint-order: stroke fill;
+  stroke-width: 3px;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
+  stroke: rgba(15, 23, 42, 0.9);
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
+  stroke: rgba(255, 255, 255, 0.9);
+}
+
+/* Block Diagrams (block-beta) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) rect.basic {
+  fill: var(--mpe-node) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.5px !important;
+  rx: 6px !important;
+  ry: 6px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) rect.cluster {
+  fill: var(--mpe-cluster-bkg, rgba(148, 163, 184, 0.12)) !important;
+  stroke: var(--mpe-border) !important;
+  stroke-width: 1.5px !important;
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) text {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif !important;
 }
 
 /* Timelines */

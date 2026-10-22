@@ -19,6 +19,7 @@ import { createPathController } from './highlight';
 import { computeDiagramSpacing, styleSvg, widenSingleRectangles, wrapDecisions, type Direction } from './layout';
 import { DEFAULT_SETTINGS, GenieSettingsTab, normalizeSettings, type GenieSettings } from './settings';
 import { SvgClipboard } from './svg-clipboard';
+import { adaptDiagramSource } from './transpiler';
 
 type MermaidRender = (this: unknown, id: string, source: unknown, ...args: unknown[]) => Promise<string | RenderResult>;
 interface MermaidRuntime {
@@ -104,6 +105,17 @@ export default class MermaidGeniePlugin extends Plugin {
         return original.call(this, id, text, ...args);
       }
 
+      const header = text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n/);
+      const prefix = header ? header[0] : '';
+      const body = text.slice(prefix.length);
+
+      // Resilient adapter: gracefully transpiles unsupported modern/extended syntaxes
+      // (ZenUML, UseCase-beta, TreeView-beta, AgentFlow-beta) to standard Mermaid
+      const adapted = adaptDiagramSource(body);
+      if (adapted.transpiled) {
+        text = prefix + adapted.code;
+      }
+
       const currentSettings = getSettings();
       const dark = document.body.classList.contains('theme-dark');
 
@@ -136,9 +148,6 @@ export default class MermaidGeniePlugin extends Plugin {
       if (direction && currentSettings.compactLayout) {
         text = wrapDecisions(text);
       }
-
-      const header = text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n/);
-      const prefix = header ? header[0] : '';
 
       const configuredDefaults: MermaidConfig = {
         theme: dark ? 'dark' : 'base',
@@ -314,11 +323,26 @@ export default class MermaidGeniePlugin extends Plugin {
           section0: palette.surface,
           section1: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
 
-          // Requirement diagrams
+          // Requirement diagrams (SysML)
+          requirementBackground: palette.surface,
+          requirementBorderColor: palette.border,
+          requirementBorderSize: '1.5px',
+          requirementTextColor: palette.text,
+          relationColor: palette.line,
+          relationLabelBackground: palette.label,
+          requirementEdgeLabelBackground: palette.label,
           reqTitleColor: palette.text,
           reqLabelColor: palette.text,
           reqBoxColor: palette.surface,
           reqBorderColor: palette.border,
+        },
+        c4: {
+          c4ShapeMargin: 90,
+          c4BoundaryMargin: 35,
+          diagramMarginX: 50,
+          diagramMarginY: 35,
+          c4ShapePadding: 24,
+          useMaxWidth: false,
         },
         flowchart: {
           curve: 'basis',

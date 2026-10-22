@@ -277,4 +277,76 @@ describe('Alignment & Layout Precision Tests', () => {
     assert.ok(enhanced.includes(`stroke="${darkPalette.line}"`), 'Relationship line should use palette line color');
     assert.ok(enhanced.includes(`fill="${darkPalette.text}"`), 'Text should use palette text color');
   });
+
+  it('resolves Sankey diagram label collisions by staggering overlapping Y coordinates', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', false);
+    // Middle column collision: Electricity at x=212, y=192 and Data Center at x=387, y=192
+    const sankeySvg = `<svg id="sankey-test" class="mermaid">
+      <g class="node-labels">
+        <text id="lbl1" x="212.67" y="192.86" text-anchor="start">Electricity&#10;100</text>
+        <text id="lbl2" x="387.33" y="192.48" text-anchor="end">Data Center Infrastructure&#10;100</text>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(sankeySvg, '', DEFAULT_SETTINGS, palette, false);
+    const m1 = enhanced.match(/id="lbl1"[^>]*y="([-\d.]+)"/);
+    const m2 = enhanced.match(/id="lbl2"[^>]*y="([-\d.]+)"/);
+
+    assert.ok(m1, 'Label 1 should have Y attribute');
+    assert.ok(m2, 'Label 2 should have Y attribute');
+
+    const y1 = parseFloat(m1[1]!);
+    const y2 = parseFloat(m2[1]!);
+
+    // Vertical distance should now be >= 40px to prevent overlap
+    const vDist = Math.abs(y1 - y2);
+    assert.ok(vDist >= 40, `Sankey labels should be separated vertically by >= 40px, got ${vDist}`);
+  });
+
+  it('resolves C4 architecture relationship crowding and generates protective pill backgrounds', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', false);
+    const c4Svg = `<svg id="c4-test" class="mermaid">
+      <g class="relationships">
+        <g class="relationship">
+          <text class="relationshipLabel" x="840" y="403">Reads and writes notes locally</text>
+        </g>
+        <g class="relationship">
+          <text class="relationshipLabel" x="1010" y="403">Syncs encrypted note snapshots</text>
+        </g>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(c4Svg, '', DEFAULT_SETTINGS, palette, false);
+    // Verify protective pill backgrounds are added
+    assert.ok(enhanced.includes('class="c4-rel-pill"'), 'C4 relationship pill background rects should be generated');
+
+    // Verify Y coordinates are staggered to prevent collision
+    const yMatches = [...enhanced.matchAll(/class="relationshipLabel"[^>]*y="([-\d.]+)"/g)].map(m => parseFloat(m[1]!));
+    assert.equal(yMatches.length, 2);
+    const vDist = Math.abs(yMatches[0]! - yMatches[1]!);
+    assert.ok(vDist >= 35, `C4 relationship labels should be staggered vertically by >= 35px, got ${vDist}`);
+  });
+
+  it('enhances SysML requirement diagrams with palette surface fills and borders', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', true);
+    const reqSvg = `<svg id="req-test" class="requirementDiagram mermaid">
+      <g class="node">
+        <rect class="reqBox basic" width="200" height="120" fill="#000000" stroke="#444444"/>
+        <text class="reqTitle">Req_Performance</text>
+      </g>
+      <g class="node">
+        <rect class="basic" width="160" height="80" fill="#000000"/>
+        <text class="nodeLabel">&lt;&lt;Element&gt;&gt; Engine</text>
+      </g>
+      <g class="edgeLabels">
+        <rect class="labelBkg" width="80" height="24"/>
+        <text>&lt;&lt;satisfies&gt;&gt;</text>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(reqSvg, '', DEFAULT_SETTINGS, palette, true);
+    assert.ok(enhanced.includes(`fill="${palette.surface}"`), 'Requirement box should use palette surface fill');
+    assert.ok(enhanced.includes(`stroke="${palette.border}"`), 'Requirement box should use palette border');
+    assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Requirement text should use palette text fill');
+  });
 });

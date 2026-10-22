@@ -1272,6 +1272,147 @@ function fixClusterHeaderOverlap(doc) {
     }
   }
 }
+function fixSankeyCollisions(doc) {
+  const textNodes = Array.from(doc.querySelectorAll("g.node-labels text, .sankey-node text, .sankey text"));
+  if (textNodes.length < 2) return;
+  const labels = textNodes.map((el) => {
+    const x = parseFloat(el.getAttribute("x") || "0");
+    const y = parseFloat(el.getAttribute("y") || "0");
+    const anchor = el.getAttribute("text-anchor") || "start";
+    const text = el.textContent || "";
+    const lines = text.split("\n").filter(Boolean);
+    const maxLine = Math.max(...lines.map((l) => l.length), 1);
+    const width = maxLine * 8 + 10;
+    const height = Math.max(lines.length * 16, 22);
+    const xMin = anchor === "start" ? x : anchor === "end" ? x - width : x - width / 2;
+    const xMax = xMin + width;
+    return { el, x, y, anchor, width, height, xMin, xMax };
+  });
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = i + 1; j < labels.length; j++) {
+      const a = labels[i];
+      const b = labels[j];
+      const hOverlap = a.xMin < b.xMax + 12 && b.xMin < a.xMax + 12;
+      const vDist = Math.abs(a.y - b.y);
+      if (hOverlap && vDist < 36) {
+        const shift = Math.max(24, (38 - vDist) / 2);
+        if (a.y <= b.y) {
+          a.y -= shift;
+          b.y += shift;
+        } else {
+          a.y += shift;
+          b.y -= shift;
+        }
+        a.el.setAttribute("y", String(a.y));
+        b.el.setAttribute("y", String(b.y));
+        const updateTspans = (item) => {
+          const tspans = Array.from(item.el.querySelectorAll("tspan"));
+          if (tspans.length > 0) {
+            tspans.forEach((ts, idx) => {
+              if (ts.hasAttribute("y")) {
+                ts.setAttribute("y", String(item.y + idx * 16));
+              }
+            });
+          }
+        };
+        updateTspans(a);
+        updateTspans(b);
+      }
+    }
+  }
+}
+function fixC4RelationshipCollisions(doc, palette) {
+  const relLabels = Array.from(
+    doc.querySelectorAll('.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"]')
+  );
+  const labelItems = [];
+  for (const el of relLabels) {
+    const x = parseFloat(el.getAttribute("x") || "0");
+    const y = parseFloat(el.getAttribute("y") || "0");
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x === 0 && y === 0) continue;
+    const text = (el.textContent || "").trim();
+    if (!text) continue;
+    const width = Math.max(text.length * 7.5, 60);
+    labelItems.push({ el, x, y, width, height: 24 });
+  }
+  for (let i = 0; i < labelItems.length; i++) {
+    for (let j = i + 1; j < labelItems.length; j++) {
+      const a = labelItems[i];
+      const b = labelItems[j];
+      const hDist = Math.abs(a.x - b.x);
+      const vDist = Math.abs(a.y - b.y);
+      const minHDist = (a.width + b.width) / 2 + 10;
+      if (vDist < 25 && hDist < minHDist) {
+        if (a.y <= b.y) {
+          a.y -= 22;
+          b.y += 22;
+        } else {
+          a.y += 22;
+          b.y -= 22;
+        }
+        a.el.setAttribute("y", String(a.y));
+        b.el.setAttribute("y", String(b.y));
+      }
+    }
+  }
+  for (const item of labelItems) {
+    const parent = item.el.parentElement;
+    if (!parent) continue;
+    if (parent.querySelector("rect.c4-rel-pill")) continue;
+    const padX = 8;
+    const padY = 4;
+    const rect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.classList.add("c4-rel-pill");
+    rect.setAttribute("x", String(item.x - item.width / 2 - padX));
+    rect.setAttribute("y", String(item.y - 12 - padY));
+    rect.setAttribute("width", String(item.width + padX * 2));
+    rect.setAttribute("height", String(24 + padY));
+    rect.setAttribute("rx", "4");
+    rect.setAttribute("ry", "4");
+    rect.setAttribute("fill", palette.label);
+    rect.setAttribute("stroke", palette.border);
+    rect.setAttribute("stroke-width", "1px");
+    rect.setAttribute("opacity", "0.94");
+    parent.insertBefore(rect, item.el);
+  }
+}
+function fixRequirementDiagram(doc, palette, _dark) {
+  const root = doc.documentElement;
+  const isReq = root.classList.contains("requirementDiagram") || !!doc.querySelector(".requirementDiagram, g.requirement, g.element, .reqBox, .reqTitle");
+  if (!isReq) return;
+  for (const rect of doc.querySelectorAll(".reqBox, .requirementDiagram g.node rect, .requirementDiagram rect.basic")) {
+    rect.setAttribute("fill", palette.surface);
+    rect.setAttribute("stroke", palette.border);
+    rect.setAttribute("stroke-width", "1.5px");
+    rect.setAttribute("rx", "6");
+    rect.setAttribute("ry", "6");
+  }
+  for (const node of doc.querySelectorAll(".requirementDiagram g.node")) {
+    const textContent = node.textContent || "";
+    if (textContent.includes("<<Element>>") || textContent.includes("type:")) {
+      const rect = node.querySelector("rect, path.outer-path");
+      if (rect) {
+        rect.setAttribute("fill", palette.clusterBkg ?? palette.surface);
+        rect.setAttribute("stroke", palette.accent);
+        rect.setAttribute("stroke-width", "1.5px");
+      }
+    }
+  }
+  for (const line of doc.querySelectorAll(".req-title-line, .requirementDiagram line")) {
+    line.setAttribute("stroke", palette.border);
+    line.setAttribute("stroke-width", "1.5px");
+  }
+  for (const text of doc.querySelectorAll(".requirementDiagram .nodeLabel text, .requirementDiagram .nodeLabel span, .reqTitle, .reqLabel, .reqText")) {
+    text.setAttribute("fill", palette.text);
+    if (text.style) text.style.color = palette.text;
+  }
+  for (const labelBkg of doc.querySelectorAll(".requirementDiagram .labelBkg, .requirementDiagram .edgeLabels rect, .reqLabelBox")) {
+    labelBkg.setAttribute("fill", palette.label);
+    labelBkg.setAttribute("stroke", palette.border);
+    labelBkg.setAttribute("rx", "5");
+    labelBkg.setAttribute("ry", "5");
+  }
+}
 function styleSvg(svg, direction, settings, palette, dark) {
   const compactLayout = settings.compactLayout !== false;
   svg = svg.replace(/&nbsp;/g, "\xA0").replace(/<br\s*>/gi, "<br/>");
@@ -1643,6 +1784,9 @@ function styleSvg(svg, direction, settings, palette, dark) {
     edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
   fixClusterHeaderOverlap(doc);
+  fixSankeyCollisions(doc);
+  fixC4RelationshipCollisions(doc, palette);
+  fixRequirementDiagram(doc, palette, dark);
   const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
     const [x, y, width, height] = viewBox;
@@ -1905,6 +2049,375 @@ var SvgClipboard = class {
   }
 };
 
+// src/transpiler.ts
+function cleanLines(source) {
+  return source.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+}
+function transpileZenUML(source) {
+  const lines = cleanLines(source);
+  const output = ["sequenceDiagram", "    autonumber"];
+  const activationStack = [];
+  const blockTypeStack = [];
+  let defaultCaller = "User";
+  let hasDeclaredActors = false;
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (/^\s*zenuml\b/i.test(trimmed)) {
+      continue;
+    }
+    const titleMatch = trimmed.match(/^title\s+(.*)$/i);
+    if (titleMatch) {
+      output.push(`    title ${titleMatch[1].trim()}`);
+      continue;
+    }
+    if (trimmed.startsWith("//")) {
+      const commentText = trimmed.replace(/^\/\/\s*/, "");
+      output.push(`    %% ${commentText}`);
+      continue;
+    }
+    const annotatorMatch = trimmed.match(/^@([A-Za-z]+)\s+([A-Za-z0-9_]+)(?:\s+as\s+(.*))?$/);
+    if (annotatorMatch) {
+      const type = annotatorMatch[1].toLowerCase();
+      const id = annotatorMatch[2];
+      const alias = annotatorMatch[3]?.trim();
+      hasDeclaredActors = true;
+      if (!defaultCaller || defaultCaller === "User") {
+        defaultCaller = id;
+      }
+      if (type === "actor") {
+        output.push(alias ? `    actor ${id} as ${alias}` : `    actor ${id}`);
+      } else if (type === "database") {
+        output.push(alias ? `    participant ${id} as [(\xABDatabase\xBB ${alias})]` : `    participant ${id} as [(\xABDatabase\xBB ${id})]`);
+      } else {
+        const stereotype = `\xAB${annotatorMatch[1]}\xBB`;
+        output.push(alias ? `    participant ${id} as ${stereotype} ${alias}` : `    participant ${id} as ${stereotype} ${id}`);
+      }
+      continue;
+    }
+    const aliasMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+as\s+([A-Za-z0-9_]+.*)$/);
+    if (aliasMatch && !trimmed.includes("->") && !trimmed.includes(".")) {
+      output.push(`    participant ${aliasMatch[1]} as ${aliasMatch[2]}`);
+      continue;
+    }
+    if (/^[A-Za-z0-9_]+$/.test(trimmed) && !["try", "catch", "finally", "par", "opt", "end"].includes(trimmed)) {
+      output.push(`    participant ${trimmed}`);
+      if (!hasDeclaredActors) {
+        defaultCaller = trimmed;
+        hasDeclaredActors = true;
+      }
+      continue;
+    }
+    const newMatch = trimmed.match(/^new\s+([A-Za-z0-9_]+)(?:\((.*)\))?$/);
+    if (newMatch) {
+      const createdObj = newMatch[1];
+      const args = newMatch[2] ? ` (${newMatch[2]})` : "";
+      const caller = activationStack.length > 0 ? activationStack[activationStack.length - 1].callee : defaultCaller;
+      output.push(`    create participant ${createdObj}`);
+      output.push(`    ${caller}->>+${createdObj}: \xABcreate\xBB${args}`);
+      continue;
+    }
+    const loopMatch = trimmed.match(/^(?:while|for|forEach|foreach|loop)\s*\((.*)\)\s*\{?$/);
+    if (loopMatch) {
+      const cond = loopMatch[1].trim() || "loop condition";
+      output.push(`    loop ${cond}`);
+      blockTypeStack.push("loop");
+      continue;
+    }
+    const ifMatch = trimmed.match(/^(?:opt\s+)?if\s*\((.*)\)\s*\{?$/);
+    if (ifMatch) {
+      const cond = ifMatch[1].trim() || "condition";
+      output.push(`    alt ${cond}`);
+      blockTypeStack.push("alt");
+      continue;
+    }
+    const elseIfMatch = trimmed.match(/^(?:\}\s*)?else\s*if\s*\((.*)\)\s*\{?$/);
+    if (elseIfMatch) {
+      const cond = elseIfMatch[1].trim() || "condition";
+      output.push(`    else ${cond}`);
+      continue;
+    }
+    if (/^(?:\}\s*)?else\s*\{?$/.test(trimmed)) {
+      output.push("    else");
+      continue;
+    }
+    if (/^opt\s*\{?$/.test(trimmed)) {
+      output.push("    opt");
+      blockTypeStack.push("opt");
+      continue;
+    }
+    if (/^par\s*\{?$/.test(trimmed)) {
+      output.push("    par");
+      blockTypeStack.push("par");
+      continue;
+    }
+    if (/^try\s*\{?$/.test(trimmed)) {
+      output.push("    critical Try");
+      blockTypeStack.push("critical");
+      continue;
+    }
+    if (/^catch\s*\{?$/.test(trimmed)) {
+      output.push("    option Catch");
+      continue;
+    }
+    if (/^finally\s*\{?$/.test(trimmed)) {
+      output.push("    option Finally");
+      continue;
+    }
+    const returnMatch = trimmed.match(/^return(?:\s+(.*))?$/);
+    if (returnMatch) {
+      const retVal = returnMatch[1]?.trim() || "";
+      if (activationStack.length > 0) {
+        const top = activationStack[activationStack.length - 1];
+        top.returned = true;
+        const msg = retVal ? `: ${retVal}` : "";
+        output.push(`    ${top.callee}-->>-${top.caller}${msg}`);
+      }
+      continue;
+    }
+    if (trimmed.startsWith("@return") || trimmed.startsWith("@reply")) {
+      const nextLine = (lines[i + 1] || "").trim();
+      if (nextLine.includes("->")) {
+        const arrow = nextLine.match(/^([A-Za-z0-9_]+)\s*->\s*([A-Za-z0-9_]+)\s*:\s*(.*)$/);
+        if (arrow) {
+          output.push(`    ${arrow[1]}-->>${arrow[2]}: ${arrow[3]}`);
+          i++;
+          continue;
+        }
+      }
+    }
+    const assignSyncMatch = trimmed.match(/^(?:[A-Za-z0-9_<>[\],\s]+\s+)?([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+(?:\(.*\))?)$/);
+    if (assignSyncMatch) {
+      const varName = assignSyncMatch[1];
+      const target = assignSyncMatch[2];
+      const method = assignSyncMatch[3];
+      const caller = activationStack.length > 0 ? activationStack[activationStack.length - 1].callee : defaultCaller;
+      output.push(`    ${caller}->>+${target}: ${method}`);
+      output.push(`    ${target}-->>-${caller}: ${varName}`);
+      continue;
+    }
+    const arrowSyncBlockMatch = trimmed.match(/^([A-Za-z0-9_]+)\s*->\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+(?:\(.*\))?)\s*\{$/);
+    if (arrowSyncBlockMatch) {
+      const caller = arrowSyncBlockMatch[1];
+      const callee = arrowSyncBlockMatch[2];
+      const method = arrowSyncBlockMatch[3];
+      output.push(`    ${caller}->>+${callee}: ${method}`);
+      activationStack.push({ caller, callee });
+      blockTypeStack.push("method");
+      continue;
+    }
+    const dotSyncBlockMatch = trimmed.match(/^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+(?:\(.*\))?)\s*\{$/);
+    if (dotSyncBlockMatch) {
+      const callee = dotSyncBlockMatch[1];
+      const method = dotSyncBlockMatch[2];
+      const caller = activationStack.length > 0 ? activationStack[activationStack.length - 1].callee : defaultCaller;
+      output.push(`    ${caller}->>+${callee}: ${method}`);
+      activationStack.push({ caller, callee });
+      blockTypeStack.push("method");
+      continue;
+    }
+    const bareSyncMatch = trimmed.match(/^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+(?:\(.*\))?)$/);
+    if (bareSyncMatch) {
+      const callee = bareSyncMatch[1];
+      const method = bareSyncMatch[2];
+      const caller = activationStack.length > 0 ? activationStack[activationStack.length - 1].callee : defaultCaller;
+      output.push(`    ${caller}->>+${callee}: ${method}`);
+      output.push(`    deactivate ${callee}`);
+      continue;
+    }
+    const asyncMsgMatch = trimmed.match(/^([A-Za-z0-9_]+)\s*->\s*([A-Za-z0-9_]+)\s*:\s*(.*)$/);
+    if (asyncMsgMatch) {
+      output.push(`    ${asyncMsgMatch[1]}->>${asyncMsgMatch[2]}: ${asyncMsgMatch[3]}`);
+      continue;
+    }
+    if (trimmed === "}" || trimmed.startsWith("}")) {
+      const blockType = blockTypeStack.pop();
+      if (blockType === "method") {
+        const top = activationStack.pop();
+        if (top && !top.returned) {
+          output.push(`    deactivate ${top.callee}`);
+        }
+      } else if (blockType) {
+        output.push("    end");
+      }
+      continue;
+    }
+    output.push(`    ${trimmed}`);
+  }
+  while (activationStack.length > 0) {
+    const top = activationStack.pop();
+    if (top && !top.returned) {
+      output.push(`    deactivate ${top.callee}`);
+    }
+  }
+  while (blockTypeStack.length > 0) {
+    const bt = blockTypeStack.pop();
+    if (bt !== "method") {
+      output.push("    end");
+    }
+  }
+  return output.join("\n");
+}
+function transpileUseCase(source) {
+  const lines = cleanLines(source);
+  const dirMatch = source.match(/\bdirection\s+(LR|RL|TD|TB|BT)\b/i);
+  const direction = dirMatch ? dirMatch[1].toUpperCase() : "LR";
+  const output = [`flowchart ${direction}`];
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (/^\s*(?:usecase-beta|usecase)\b/i.test(trimmed)) continue;
+    if (/^\s*direction\s+/i.test(trimmed)) continue;
+    const actorMatch = trimmed.match(/^actor\s+([A-Za-z0-9_]+)(?:\(["'](.*?)["']\))?$/);
+    if (actorMatch) {
+      const id = actorMatch[1];
+      const label = actorMatch[2] ?? id;
+      output.push(`    ${id}["\u{1F464} ${label}"]`);
+      continue;
+    }
+    const boundaryMatch = trimmed.match(/^systemBoundary\s+["']?([^"']+)["']?$/i);
+    if (boundaryMatch) {
+      const rawName = boundaryMatch[1].trim();
+      const safeId = rawName.replace(/[^A-Za-z0-9_]/g, "_");
+      output.push(`    subgraph ${safeId}["${rawName}"]`);
+      continue;
+    }
+    if (/^end$/i.test(trimmed)) {
+      output.push("    end");
+      continue;
+    }
+    const ucMatch = trimmed.match(/^([A-Za-z0-9_]+)(?:\(["'](.*?)["']\)|\[["'](.*?)["']\])$/);
+    if (ucMatch) {
+      const id = ucMatch[1];
+      const label = ucMatch[2] || ucMatch[3] || id;
+      output.push(`    ${id}(["${label}"])`);
+      continue;
+    }
+    const stereotypeRel = trimmed.match(/^([A-Za-z0-9_]+)\s*\.\.>\s*:\s*([A-Za-z0-9_]+)\s+([A-Za-z0-9_]+)$/);
+    if (stereotypeRel) {
+      output.push(`    ${stereotypeRel[1]} -. "\xAB${stereotypeRel[2]}\xBB" .-> ${stereotypeRel[3]}`);
+      continue;
+    }
+    const arrowRel = trimmed.match(/^([A-Za-z0-9_]+)\s*(-->|\.\.>)\s*([A-Za-z0-9_]+)(?:\s*:\s*(.*))?$/);
+    if (arrowRel) {
+      const src = arrowRel[1];
+      const arrow = arrowRel[2] === "-->" ? "-->" : "-.->";
+      const dest = arrowRel[3];
+      const label = arrowRel[4] ? `|"${arrowRel[4].trim()}"| ` : "";
+      output.push(`    ${src} ${arrow} ${label}${dest}`);
+      continue;
+    }
+    output.push(`    ${trimmed}`);
+  }
+  return output.join("\n");
+}
+function transpileAgentFlow(source) {
+  const lines = cleanLines(source);
+  const dirMatch = source.match(/^agentflow-beta\s+([A-Za-z]+)/i);
+  const direction = dirMatch ? dirMatch[1].toUpperCase() : "TB";
+  const output = [`flowchart ${direction}`];
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\s*agentflow-beta\b/i.test(trimmed)) continue;
+    const flowMatch = trimmed.match(/^flow\s+([A-Za-z0-9_]+)(?:\[["']?(.*?)["']?\])?$/);
+    if (flowMatch) {
+      const id = flowMatch[1];
+      const label = flowMatch[2] || id;
+      output.push(`    subgraph ${id}["${label}"]`);
+      continue;
+    }
+    if (/^end$/i.test(trimmed)) {
+      output.push("    end");
+      continue;
+    }
+    const shapeNodeMatch = trimmed.match(/^([A-Za-z0-9_]+)\[["']?(.*?)["']?\]@\{\s*shape:\s*([A-Za-z0-9_-]+)\s*\}$/);
+    if (shapeNodeMatch) {
+      const id = shapeNodeMatch[1];
+      const label = shapeNodeMatch[2];
+      const shape = shapeNodeMatch[3].toLowerCase();
+      if (shape === "input") {
+        output.push(`    ${id}[/"\u{1F4E5} ${label}"/]`);
+      } else if (shape === "output") {
+        output.push(`    ${id}[\\"\u{1F4E4} ${label}"\\]`);
+      } else if (shape === "tool" || shape === "process") {
+        output.push(`    ${id}["\u2699\uFE0F ${label}"]`);
+      } else if (shape === "decision") {
+        output.push(`    ${id}{"${label}"}`);
+      } else {
+        output.push(`    ${id}["${label}"]`);
+      }
+      continue;
+    }
+    output.push(`    ${trimmed}`);
+  }
+  return output.join("\n");
+}
+function transpileTreeView(source) {
+  const lines = cleanLines(source).filter((l) => !/^\s*treeView-beta\b/i.test(l.trim()) && l.trim().length > 0);
+  const output = ["flowchart LR"];
+  const stack = [];
+  let counter = 0;
+  for (const rawLine of lines) {
+    const prefixMatch = rawLine.match(/^([│\s|├└├──└──\s]+)?(.*)$/);
+    const prefix = prefixMatch?.[1] || "";
+    const name = (prefixMatch?.[2] || rawLine).trim();
+    if (!name) continue;
+    const cleanPrefix = prefix.replace(/[^\s│|├└─]/g, "");
+    const depth = Math.max(0, Math.floor(cleanPrefix.length / 3));
+    counter++;
+    const safeId = `node_${counter}_${name.replace(/[^A-Za-z0-9_]/g, "_")}`;
+    const icon = name.endsWith("/") ? "\u{1F4C1}" : "\u{1F4C4}";
+    const label = `${icon} ${name}`;
+    output.push(`    ${safeId}["${label}"]`);
+    while (stack.length > 0 && stack[stack.length - 1].depth >= depth) {
+      stack.pop();
+    }
+    if (stack.length > 0) {
+      const parent = stack[stack.length - 1];
+      output.push(`    ${parent.id} --> ${safeId}`);
+    }
+    stack.push({ depth, id: safeId, label });
+  }
+  return output.join("\n");
+}
+function adaptDiagramSource(source) {
+  const trimmed = source.trimStart();
+  if (/^zenuml\b/i.test(trimmed)) {
+    return {
+      code: transpileZenUML(source),
+      transpiled: true,
+      type: "zenuml"
+    };
+  }
+  if (/^(?:usecase-beta|usecase)\b/i.test(trimmed)) {
+    return {
+      code: transpileUseCase(source),
+      transpiled: true,
+      type: "usecase"
+    };
+  }
+  if (/^agentflow-beta\b/i.test(trimmed)) {
+    return {
+      code: transpileAgentFlow(source),
+      transpiled: true,
+      type: "agentflow"
+    };
+  }
+  if (/^treeView-beta\b/i.test(trimmed)) {
+    return {
+      code: transpileTreeView(source),
+      transpiled: true,
+      type: "treeview"
+    };
+  }
+  return {
+    code: source,
+    transpiled: false,
+    type: "native"
+  };
+}
+
 // src/main.ts
 var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
   stopped = false;
@@ -1968,6 +2481,13 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       if (/^\s*%%\s*(?:mg|mfe):off\s*$/m.test(text)) {
         return original.call(this, id, text, ...args);
       }
+      const header = text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n/);
+      const prefix = header ? header[0] : "";
+      const body = text.slice(prefix.length);
+      const adapted = adaptDiagramSource(body);
+      if (adapted.transpiled) {
+        text = prefix + adapted.code;
+      }
       const currentSettings = getSettings();
       const dark = document.body.classList.contains("theme-dark");
       const cacheKey = `${dark ? "1" : "0"}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
@@ -1990,8 +2510,6 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       if (direction && currentSettings.compactLayout) {
         text = wrapDecisions(text);
       }
-      const header = text.match(/^\s*---\s*\n[\s\S]*?\n---\s*\n/);
-      const prefix = header ? header[0] : "";
       const configuredDefaults = {
         theme: dark ? "dark" : "base",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
@@ -2155,11 +2673,26 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           } : {},
           section0: palette.surface,
           section1: palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"),
-          // Requirement diagrams
+          // Requirement diagrams (SysML)
+          requirementBackground: palette.surface,
+          requirementBorderColor: palette.border,
+          requirementBorderSize: "1.5px",
+          requirementTextColor: palette.text,
+          relationColor: palette.line,
+          relationLabelBackground: palette.label,
+          requirementEdgeLabelBackground: palette.label,
           reqTitleColor: palette.text,
           reqLabelColor: palette.text,
           reqBoxColor: palette.surface,
           reqBorderColor: palette.border
+        },
+        c4: {
+          c4ShapeMargin: 90,
+          c4BoundaryMargin: 35,
+          diagramMarginX: 50,
+          diagramMarginY: 35,
+          c4ShapePadding: 24,
+          useMaxWidth: false
         },
         flowchart: {
           curve: "basis",

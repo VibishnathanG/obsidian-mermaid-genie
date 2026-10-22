@@ -528,6 +528,197 @@ export function fixClusterHeaderOverlap(doc: Document): void {
   }
 }
 
+/**
+ * Detects and resolves text collisions in Sankey diagrams.
+ * When middle columns are close, outgoing and incoming node labels at the same Y collide horizontally.
+ * This function detects overlapping label bounding boxes and staggers them vertically,
+ * guaranteeing clear readability with proper line clearance.
+ */
+export function fixSankeyCollisions(doc: Document): void {
+  const textNodes = Array.from(doc.querySelectorAll('g.node-labels text, .sankey-node text, .sankey text'));
+  if (textNodes.length < 2) return;
+
+  interface SankeyLabelItem {
+    el: Element;
+    x: number;
+    y: number;
+    anchor: 'start' | 'end' | 'middle';
+    width: number;
+    height: number;
+    xMin: number;
+    xMax: number;
+  }
+
+  const labels: SankeyLabelItem[] = textNodes.map(el => {
+    const x = parseFloat(el.getAttribute('x') || '0');
+    const y = parseFloat(el.getAttribute('y') || '0');
+    const anchor = (el.getAttribute('text-anchor') || 'start') as 'start' | 'end' | 'middle';
+    const text = el.textContent || '';
+    const lines = text.split('\n').filter(Boolean);
+    const maxLine = Math.max(...lines.map(l => l.length), 1);
+    const width = maxLine * 8 + 10;
+    const height = Math.max(lines.length * 16, 22);
+    const xMin = anchor === 'start' ? x : (anchor === 'end' ? x - width : x - width / 2);
+    const xMax = xMin + width;
+    return { el, x, y, anchor, width, height, xMin, xMax };
+  });
+
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = i + 1; j < labels.length; j++) {
+      const a = labels[i]!;
+      const b = labels[j]!;
+      // Check horizontal interval overlap
+      const hOverlap = a.xMin < b.xMax + 12 && b.xMin < a.xMax + 12;
+      const vDist = Math.abs(a.y - b.y);
+
+      if (hOverlap && vDist < 36) {
+        // Vertical collision detected! Shift the upper label upward and lower label downward
+        const shift = Math.max(24, (38 - vDist) / 2);
+        if (a.y <= b.y) {
+          a.y -= shift;
+          b.y += shift;
+        } else {
+          a.y += shift;
+          b.y -= shift;
+        }
+
+        a.el.setAttribute('y', String(a.y));
+        b.el.setAttribute('y', String(b.y));
+
+        // Also update any child <tspan> elements
+        const updateTspans = (item: SankeyLabelItem) => {
+          const tspans = Array.from(item.el.querySelectorAll('tspan'));
+          if (tspans.length > 0) {
+            tspans.forEach((ts, idx) => {
+              if (ts.hasAttribute('y')) {
+                ts.setAttribute('y', String(item.y + idx * 16));
+              }
+            });
+          }
+        };
+        updateTspans(a);
+        updateTspans(b);
+      }
+    }
+  }
+}
+
+/**
+ * Detects and resolves overlapping relationship labels and cards in C4 architecture diagrams.
+ * Staggers colliding horizontal relationship labels and ensures each relationship badge has
+ * a legible high-contrast background pill.
+ */
+export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData): void {
+  const relLabels = Array.from(
+    doc.querySelectorAll('.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"]')
+  );
+
+  const labelItems: Array<{ el: Element; x: number; y: number; width: number; height: number }> = [];
+
+  for (const el of relLabels) {
+    const x = parseFloat(el.getAttribute('x') || '0');
+    const y = parseFloat(el.getAttribute('y') || '0');
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) continue;
+    const text = (el.textContent || '').trim();
+    if (!text) continue;
+    const width = Math.max(text.length * 7.5, 60);
+    labelItems.push({ el, x, y, width, height: 24 });
+  }
+
+  for (let i = 0; i < labelItems.length; i++) {
+    for (let j = i + 1; j < labelItems.length; j++) {
+      const a = labelItems[i]!;
+      const b = labelItems[j]!;
+      const hDist = Math.abs(a.x - b.x);
+      const vDist = Math.abs(a.y - b.y);
+
+      const minHDist = (a.width + b.width) / 2 + 10;
+      if (vDist < 25 && hDist < minHDist) {
+        if (a.y <= b.y) {
+          a.y -= 22;
+          b.y += 22;
+        } else {
+          a.y += 22;
+          b.y -= 22;
+        }
+        a.el.setAttribute('y', String(a.y));
+        b.el.setAttribute('y', String(b.y));
+      }
+    }
+  }
+
+  for (const item of labelItems) {
+    const parent = item.el.parentElement;
+    if (!parent) continue;
+    if (parent.querySelector('rect.c4-rel-pill')) continue;
+
+    const padX = 8;
+    const padY = 4;
+    const rect = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.classList.add('c4-rel-pill');
+    rect.setAttribute('x', String(item.x - item.width / 2 - padX));
+    rect.setAttribute('y', String(item.y - 12 - padY));
+    rect.setAttribute('width', String(item.width + padX * 2));
+    rect.setAttribute('height', String(24 + padY));
+    rect.setAttribute('rx', '4');
+    rect.setAttribute('ry', '4');
+    rect.setAttribute('fill', palette.label);
+    rect.setAttribute('stroke', palette.border);
+    rect.setAttribute('stroke-width', '1px');
+    rect.setAttribute('opacity', '0.94');
+
+    parent.insertBefore(rect, item.el);
+  }
+}
+
+/**
+ * Enhances SysML Requirement Diagrams with thematic container fills, crisp borders,
+ * clear typography, and styled relationship badges.
+ */
+export function fixRequirementDiagram(doc: Document, palette: PaletteData, _dark: boolean): void {
+  const root = doc.documentElement;
+  const isReq = root.classList.contains('requirementDiagram') ||
+    !!doc.querySelector('.requirementDiagram, g.requirement, g.element, .reqBox, .reqTitle');
+  if (!isReq) return;
+
+  for (const rect of doc.querySelectorAll('.reqBox, .requirementDiagram g.node rect, .requirementDiagram rect.basic')) {
+    rect.setAttribute('fill', palette.surface);
+    rect.setAttribute('stroke', palette.border);
+    rect.setAttribute('stroke-width', '1.5px');
+    rect.setAttribute('rx', '6');
+    rect.setAttribute('ry', '6');
+  }
+
+  for (const node of doc.querySelectorAll('.requirementDiagram g.node')) {
+    const textContent = node.textContent || '';
+    if (textContent.includes('<<Element>>') || textContent.includes('type:')) {
+      const rect = node.querySelector('rect, path.outer-path');
+      if (rect) {
+        rect.setAttribute('fill', palette.clusterBkg ?? palette.surface);
+        rect.setAttribute('stroke', palette.accent);
+        rect.setAttribute('stroke-width', '1.5px');
+      }
+    }
+  }
+
+  for (const line of doc.querySelectorAll('.req-title-line, .requirementDiagram line')) {
+    line.setAttribute('stroke', palette.border);
+    line.setAttribute('stroke-width', '1.5px');
+  }
+
+  for (const text of doc.querySelectorAll('.requirementDiagram .nodeLabel text, .requirementDiagram .nodeLabel span, .reqTitle, .reqLabel, .reqText')) {
+    text.setAttribute('fill', palette.text);
+    if ((text as HTMLElement).style) (text as HTMLElement).style.color = palette.text;
+  }
+
+  for (const labelBkg of doc.querySelectorAll('.requirementDiagram .labelBkg, .requirementDiagram .edgeLabels rect, .reqLabelBox')) {
+    labelBkg.setAttribute('fill', palette.label);
+    labelBkg.setAttribute('stroke', palette.border);
+    labelBkg.setAttribute('rx', '5');
+    labelBkg.setAttribute('ry', '5');
+  }
+}
+
 export function styleSvg(
   svg: string,
   direction: Direction | '',
@@ -966,6 +1157,15 @@ export function styleSvg(
 
   // Resolve Kanban and cluster header overlaps so column titles are never blocked by cards
   fixClusterHeaderOverlap(doc);
+
+  // Resolve Sankey diagram label overlaps
+  fixSankeyCollisions(doc);
+
+  // Resolve C4 architecture relationship label overlaps and add clean badge pills
+  fixC4RelationshipCollisions(doc, palette);
+
+  // Enhance Requirement diagram styles, container fills, and contrast
+  fixRequirementDiagram(doc, palette, dark);
 
   // Expand viewBox if outer return lanes or routes extend past original dimensions
   const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);

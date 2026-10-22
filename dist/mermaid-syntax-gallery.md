@@ -294,21 +294,26 @@ quadrantChart
 
 ```mermaid
 requirementDiagram
+
     requirement Req_Performance {
         id: 101
         text: Render diagrams under 100ms
         risk: medium
         verifymethod: benchmark
     }
-    requirement Req_Accessibility {
+
+    functionalRequirement Req_Accessibility {
         id: 102
         text: Maintain WCAG AA 4.5 contrast
         risk: low
         verifymethod: automated_test
     }
+
     element Engine {
         type: software_module
+        docref: CoreRenderer
     }
+
     Engine - satisfies -> Req_Performance
     Engine - satisfies -> Req_Accessibility
 ```
@@ -322,17 +327,22 @@ requirementDiagram
 ```mermaid
 usecase-beta
     direction LR
+
     actor Author("Editor")
     actor Reader("Visitor")
-    systemBoundary "Obsidian Knowledge Base"
+
+    systemBoundary KnowledgeBase
         NoteCreation("Create & Link Notes")
         MermaidRender("Render Interactive Flowcharts")
         ExportGraph("Export SVG / PNG")
     end
+
     Author --> NoteCreation
     Author --> MermaidRender
     Author --> ExportGraph
     Reader --> MermaidRender
+
+    NoteCreation ..> : include MermaidRender
 ```
 
 [↑ Back to plan](#Master-Plan)
@@ -373,9 +383,9 @@ C4Context
     System_Ext(vault, "Local File Vault", "Stores markdown notes and attachments")
     System_Ext(cloud, "Cloud Sync Service", "Synchronizes vaults across devices")
 
-    Rel(user, obsidian, "Edits notes and inspects diagrams")
-    Rel(obsidian, vault, "Reads and writes notes locally")
-    Rel(obsidian, cloud, "Syncs encrypted note snapshots")
+    Rel_D(user, obsidian, "Edits notes and inspects diagrams")
+    Rel_R(obsidian, vault, "Reads and writes notes locally")
+    Rel_D(obsidian, cloud, "Syncs encrypted note snapshots")
 ```
 
 [↑ Back to plan](#Master-Plan)
@@ -429,22 +439,25 @@ timeline
 ### D17-ZenUML-Sequence
 
 > [!NOTE]
-> ZenUML interaction processes are rendered using native Mermaid sequence syntax with activation lifelines and boundary roles for 100% Obsidian compatibility without external web plugins.
+> ZenUML diagrams are automatically processed by Mermaid Genie with nested sync execution lifelines, stereotyping annotators, and reply messages for 100% Obsidian compatibility without external web plugins.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant AppUI as AppUI (Boundary)
-    participant Router as Router (Control)
-    participant VaultStore as VaultStore (Entity)
+zenuml
+    title Vault Checkout Process
+    @Actor User
+    @Boundary AppUI
+    @Control Router
+    @Entity VaultStore
 
-    User->>+AppUI: openNote(noteId)
-    AppUI->>+Router: dispatchRoute()
-    Router->>+VaultStore: fetchMarkdown(noteId)
-    VaultStore-->>-Router: markdownContent
-    Router-->>-AppUI: renderedDocument
-    AppUI-->>-User: displayView
+    User->AppUI.openNote(noteId) {
+      AppUI->Router.dispatchRoute() {
+        Router->VaultStore.fetchMarkdown(noteId) {
+          return markdownContent
+        }
+        return renderedDocument
+      }
+      return displayView
+    }
 ```
 
 [↑ Back to plan](#Master-Plan)
@@ -487,15 +500,30 @@ xychart-beta
 
 ```mermaid
 block-beta
-    columns 4
-    In(("Input Stream")):1
-    Parser["Lexer & Parser"]:1
-    Optimizer["Layout Engine"]:1
-    Out(("Rendered SVG")):1
+    columns 3
+    doc>"Document"]:2
+    space:1
+    down<["Process Flow"]>(down)
+    space:2
+    block:engine:3
+        columns 3
+        lex["Lexer & Scanner"]
+        parse["Parser Engine"]
+        opt["Layout Optimizer"]
+    end
+    space:3
+    db[("State Database")]
+    block:services:2
+        columns 1
+        serviceA["SVG Renderer"]
+        serviceB["Color & Route Pipeline"]
+    end
 
-    In --> Parser
-    Parser --> Optimizer
-    Optimizer --> Out
+    down --> lex
+    lex --> parse
+    parse --> opt
+    opt --> db
+    db --> serviceA
 ```
 
 [↑ Back to plan](#Master-Plan)
