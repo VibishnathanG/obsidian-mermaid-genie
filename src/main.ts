@@ -209,6 +209,8 @@ export default class MermaidGeniePlugin extends Plugin {
           taskBorderColor: palette.border,
           taskTextColor: palette.text,
           taskTextLightColor: palette.text,
+          taskTextDarkColor: '#0f172a',
+          activeTaskTextColor: dark ? '#0f172a' : '#ffffff',
           activeTaskBkgColor: palette.accent,
           activeTaskBorderColor: palette.accent,
           doneTaskBkgColor: palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'),
@@ -361,6 +363,9 @@ export default class MermaidGeniePlugin extends Plugin {
         },
         gantt: {
           useMaxWidth: false,
+        },
+        block: {
+          padding: 24,
         },
       };
 

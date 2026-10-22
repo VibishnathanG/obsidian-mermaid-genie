@@ -349,4 +349,64 @@ describe('Alignment & Layout Precision Tests', () => {
     assert.ok(enhanced.includes(`stroke="${palette.border}"`), 'Requirement box should use palette border');
     assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Requirement text should use palette text fill');
   });
+
+  it('formats block diagram arrow markers with 14px userSpaceOnUse and normalizes block text contrast', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', true);
+    const blockSvg = `<svg id="block-test" class="block-beta mermaid" aria-roledescription="block">
+      <defs>
+        <marker id="block-test_block-pointEnd" class="marker block" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8">
+          <path d="M 0 0 L 10 5 L 0 10 z"/>
+        </marker>
+      </defs>
+      <g class="block">
+        <rect class="basic" width="120" height="40"/>
+        <g class="label">
+          <foreignObject width="120" height="40">
+            <div xmlns="http://www.w3.org/1999/xhtml"><span class="nodeLabel">Lexer &amp; Parser</span></div>
+          </foreignObject>
+        </g>
+      </g>
+      <path class="flowchart-link" d="M 120 20 L 180 20" marker-end="url(#block-test_block-pointEnd)"/>
+    </svg>`;
+
+    const enhanced = styleSvg(blockSvg, '', DEFAULT_SETTINGS, palette, true);
+    assert.ok(enhanced.includes('markerWidth="14"'), 'Block arrow markerWidth should be enlarged to 14');
+    assert.ok(enhanced.includes('markerHeight="12"'), 'Block arrow markerHeight should be enlarged to 12');
+    assert.ok(enhanced.includes('refX="13"'), 'Block arrow refX should be 13');
+    assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Block label text should use high contrast palette text');
+  });
+
+  it('restores Sankey gradient flow visibility by neutralizing mix-blend-mode and boosting opacity', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', true);
+    const sankeySvg = `<svg id="sankey-gradient-test" class="mermaid">
+      <g class="link" style="mix-blend-mode: multiply;">
+        <path d="M 10 50 L 200 50" stroke="url(#gradient-1)" stroke-width="40"/>
+      </g>
+      <g class="node-labels">
+        <text id="lbl1" x="16" y="50" text-anchor="start">Renewable Solar 45</text>
+      </g>
+    </svg>`;
+
+    const enhanced = styleSvg(sankeySvg, '', DEFAULT_SETTINGS, palette, true);
+    assert.ok(!enhanced.includes('mix-blend-mode: multiply'), 'Sankey link should not retain multiply blend mode');
+    assert.ok(enhanced.includes('mix-blend-mode: normal;'), 'Sankey link should use normal blend mode');
+    assert.ok(enhanced.includes('stroke-opacity="0.72"'), 'Sankey dark-mode link stroke opacity should be boosted to 0.72');
+    assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Sankey text should be set to palette text');
+  });
+
+  it('guarantees high contrast text for Gantt active task bars and tick labels in dark mode', () => {
+    const palette = resolvePaletteData('multi', 'cool', 'slate', true);
+    const ganttSvg = `<svg id="gantt-contrast-test" class="gantt mermaid">
+      <g class="grid">
+        <g class="tick"><text fill="#000000">2026-03-01</text></g>
+      </g>
+      <text class="sectionTitle">Architecture</text>
+      <rect class="task active1" width="180" height="24"/>
+      <text class="taskText activeText1">Orthogonal Connector Flow</text>
+    </svg>`;
+
+    const enhanced = styleSvg(ganttSvg, '', DEFAULT_SETTINGS, palette, true);
+    assert.ok(enhanced.includes('fill="#0f172a"'), 'Active task text on light accent bar in dark mode must be dark #0f172a');
+    assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Grid tick and section titles should use palette text color');
+  });
 });

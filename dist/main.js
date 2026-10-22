@@ -1272,7 +1272,23 @@ function fixClusterHeaderOverlap(doc) {
     }
   }
 }
-function fixSankeyCollisions(doc) {
+function fixSankeyCollisions(doc, palette, dark) {
+  for (const g of doc.querySelectorAll("g.link, .link")) {
+    g.removeAttribute("style");
+    g.setAttribute("style", "mix-blend-mode: normal;");
+  }
+  for (const path of doc.querySelectorAll("g.link path, .link path")) {
+    path.setAttribute("stroke-opacity", dark ? "0.72" : "0.60");
+  }
+  if (palette) {
+    for (const text of doc.querySelectorAll("g.node-labels text, .sankey-node text, .sankey text")) {
+      text.setAttribute("fill", palette.text);
+      if (text.style) {
+        text.style.color = palette.text;
+        text.style.fill = palette.text;
+      }
+    }
+  }
   const textNodes = Array.from(doc.querySelectorAll("g.node-labels text, .sankey-node text, .sankey text"));
   if (textNodes.length < 2) return;
   const labels = textNodes.map((el) => {
@@ -1411,6 +1427,38 @@ function fixRequirementDiagram(doc, palette, _dark) {
     labelBkg.setAttribute("stroke", palette.border);
     labelBkg.setAttribute("rx", "5");
     labelBkg.setAttribute("ry", "5");
+  }
+}
+function fixBlockDiagram(doc, palette, _dark) {
+  const root = doc.documentElement;
+  const isBlock = root.classList.contains("block-beta") || root.getAttribute("aria-roledescription") === "block" || !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
+  if (!isBlock) return;
+  for (const text of doc.querySelectorAll('.block-beta text, svg[aria-roledescription="block"] text, g.block text, .block text, .block-beta .nodeLabel, svg[aria-roledescription="block"] .nodeLabel, .block .nodeLabel, .block-beta span, svg[aria-roledescription="block"] span, .block span, .block-beta p, svg[aria-roledescription="block"] p, .block p')) {
+    text.setAttribute("fill", palette.text);
+    if (text.style) {
+      text.style.color = palette.text;
+      text.style.fill = palette.text;
+    }
+  }
+}
+function fixGanttChart(doc, palette, dark) {
+  const root = doc.documentElement;
+  const isGantt = root.classList.contains("gantt") || !!doc.querySelector(".grid .tick, .taskText, .sectionTitle");
+  if (!isGantt) return;
+  const activeTextColor = dark ? "#0f172a" : "#ffffff";
+  for (const text of doc.querySelectorAll('[class*="activeText"], .taskText.active, .task.active + text')) {
+    text.setAttribute("fill", activeTextColor);
+    if (text.style) {
+      text.style.color = activeTextColor;
+      text.style.fill = activeTextColor;
+    }
+  }
+  for (const text of doc.querySelectorAll(".grid .tick text, g.tick text, .tick text, .sectionTitle, .titleText, .taskTextOutsideLeft, .taskTextOutsideRight, .taskTextOutside")) {
+    text.setAttribute("fill", palette.text);
+    if (text.style) {
+      text.style.color = palette.text;
+      text.style.fill = palette.text;
+    }
   }
 }
 function styleSvg(svg, direction, settings, palette, dark) {
@@ -1692,20 +1740,37 @@ function styleSvg(svg, direction, settings, palette, dark) {
       `translate(${item.x - offset[0]},${item.y - offset[1]})`
     );
   }
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
-    marker.setAttribute("markerUnits", "userSpaceOnUse");
-    marker.setAttribute("markerWidth", "8");
-    marker.setAttribute("markerHeight", "8");
-    marker.setAttribute("viewBox", "0 0 10 10");
-    marker.setAttribute("refY", "5");
-    marker.setAttribute("orient", "auto");
-    const start = marker.id.endsWith("pointStart");
-    marker.setAttribute("refX", start ? "0" : "10");
-    const path = marker.querySelector("path");
-    if (path) {
-      path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
-      path.setAttribute("stroke-width", "0");
-      path.setAttribute("fill", palette.line);
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="pointEnd"], marker[id*="pointStart"]')) {
+    const isBlock = marker.id.toLowerCase().includes("block") || !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
+    const start = marker.id.toLowerCase().endsWith("pointstart") || marker.id.toLowerCase().includes("pointstart");
+    if (isBlock) {
+      marker.setAttribute("markerUnits", "userSpaceOnUse");
+      marker.setAttribute("markerWidth", "14");
+      marker.setAttribute("markerHeight", "12");
+      marker.setAttribute("viewBox", "0 0 14 12");
+      marker.setAttribute("refY", "6");
+      marker.setAttribute("orient", "auto");
+      marker.setAttribute("refX", start ? "1" : "13");
+      const path = marker.querySelector("path");
+      if (path) {
+        path.setAttribute("d", start ? "M13 1 L1 6 L13 11 Z" : "M1 1 L13 6 L1 11 Z");
+        path.setAttribute("stroke-width", "0");
+        path.setAttribute("fill", palette.line);
+      }
+    } else {
+      marker.setAttribute("markerUnits", "userSpaceOnUse");
+      marker.setAttribute("markerWidth", "8");
+      marker.setAttribute("markerHeight", "8");
+      marker.setAttribute("viewBox", "0 0 10 10");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("orient", "auto");
+      marker.setAttribute("refX", start ? "0" : "10");
+      const path = marker.querySelector("path");
+      if (path) {
+        path.setAttribute("d", start ? "M10 0 L0 5 L10 10 Z" : "M0 0 L10 5 L0 10 Z");
+        path.setAttribute("stroke-width", "0");
+        path.setAttribute("fill", palette.line);
+      }
     }
   }
   for (const marker of doc.querySelectorAll('marker[id*="barbEnd"], marker[id*="barbend"], marker[id*="barbStart"], marker[id*="barbstart"], marker[id*="stateDiagram"], marker[id*="statediagram"]')) {
@@ -1784,9 +1849,11 @@ function styleSvg(svg, direction, settings, palette, dark) {
     edgeLabelsGroup.parentElement.appendChild(edgeLabelsGroup);
   }
   fixClusterHeaderOverlap(doc);
-  fixSankeyCollisions(doc);
+  fixSankeyCollisions(doc, palette, dark);
   fixC4RelationshipCollisions(doc, palette);
   fixRequirementDiagram(doc, palette, dark);
+  fixBlockDiagram(doc, palette, dark);
+  fixGanttChart(doc, palette, dark);
   const viewBox = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
     const [x, y, width, height] = viewBox;
@@ -2565,6 +2632,8 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           taskBorderColor: palette.border,
           taskTextColor: palette.text,
           taskTextLightColor: palette.text,
+          taskTextDarkColor: "#0f172a",
+          activeTaskTextColor: dark ? "#0f172a" : "#ffffff",
           activeTaskBkgColor: palette.accent,
           activeTaskBorderColor: palette.accent,
           doneTaskBkgColor: palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"),
@@ -2711,6 +2780,9 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
         },
         gantt: {
           useMaxWidth: false
+        },
+        block: {
+          padding: 24
         }
       };
       const configured = prefix + `%%{init: ${JSON.stringify(configuredDefaults)}}%%

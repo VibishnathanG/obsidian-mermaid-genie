@@ -272,8 +272,27 @@
 }
 
 /* Gantt Charts */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.grid .tick text, .sectionTitle, .taskText) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.grid .tick text, g.tick text, .tick text, .sectionTitle, .titleText, .taskTextOutsideLeft, .taskTextOutsideRight, .taskTextOutside) {
   fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
+}
+
+/* Active task bar text contrast: on light accent fill in dark mode, active text must be dark #0f172a */
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.activeText0, .activeText1, .activeText2, .activeText3, [class*="activeText"], .taskText.active, .task.active + text) {
+  fill: #0f172a !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.activeText0, .activeText1, .activeText2, .activeText3, [class*="activeText"], .taskText.active, .task.active + text) {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.taskText0, .taskText1, .taskText2, .taskText3, .taskText:not([class*="activeText"])) {
+  fill: var(--mpe-text) !important;
+  color: var(--mpe-text) !important;
 }
 
 /* Pie Charts */
@@ -363,25 +382,37 @@
 }
 
 /* Sankey Diagrams */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.link, g.link) {
+  mix-blend-mode: normal !important;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.link, g.link) path {
+  stroke-opacity: 0.72 !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.link, g.link) path {
+  stroke-opacity: 0.60 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text, .sankey text, g.node-labels text, g.nodes text) {
   fill: var(--mpe-text) !important;
   color: var(--mpe-text) !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
   paint-order: stroke fill;
-  stroke-width: 3px;
+  stroke-width: 2.5px;
 }
 
-.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
-  stroke: rgba(15, 23, 42, 0.9);
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text, .sankey text, g.node-labels text, g.nodes text) {
+  stroke: rgba(15, 23, 42, 0.88);
 }
 
-.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text) {
-  stroke: rgba(255, 255, 255, 0.9);
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node-labels text, .sankey-node text, .sankey text, g.node-labels text, g.nodes text) {
+  stroke: rgba(255, 255, 255, 0.92);
 }
 
 /* Block Diagrams (block-beta) */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) rect.basic {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) rect.basic {
   fill: var(--mpe-node) !important;
   stroke: var(--mpe-border) !important;
   stroke-width: 1.5px !important;
@@ -389,7 +420,7 @@
   ry: 6px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) rect.cluster {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) rect.cluster {
   fill: var(--mpe-cluster-bkg, rgba(148, 163, 184, 0.12)) !important;
   stroke: var(--mpe-border) !important;
   stroke-width: 1.5px !important;
@@ -397,9 +428,9 @@
   ry: 8px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block) text {
-  fill: var(--mpe-text) !important;
-  color: var(--mpe-text) !important;
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(svg[aria-roledescription="block"], .block-beta, g.block, .block) :is(text, span, p, div, .nodeLabel, .label) {
+  fill: var(--node-text, var(--mpe-text)) !important;
+  color: var(--node-text, var(--mpe-text)) !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif !important;
 }
 

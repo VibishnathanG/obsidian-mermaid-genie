@@ -529,12 +529,30 @@ export function fixClusterHeaderOverlap(doc: Document): void {
 }
 
 /**
- * Detects and resolves text collisions in Sankey diagrams.
- * When middle columns are close, outgoing and incoming node labels at the same Y collide horizontally.
- * This function detects overlapping label bounding boxes and staggers them vertically,
- * guaranteeing clear readability with proper line clearance.
+ * Detects and resolves text collisions in Sankey diagrams, optimizes linear gradient link visibility,
+ * and normalizes node label typography.
  */
-export function fixSankeyCollisions(doc: Document): void {
+export function fixSankeyCollisions(doc: Document, palette?: PaletteData, dark?: boolean): void {
+  // Remove inline mix-blend-mode: multiply from link groups and adjust stroke opacity so ribbons stay luminous
+  for (const g of doc.querySelectorAll('g.link, .link')) {
+    g.removeAttribute('style');
+    g.setAttribute('style', 'mix-blend-mode: normal;');
+  }
+  for (const path of doc.querySelectorAll('g.link path, .link path')) {
+    path.setAttribute('stroke-opacity', dark ? '0.72' : '0.60');
+  }
+
+  // Ensure high contrast label typography
+  if (palette) {
+    for (const text of doc.querySelectorAll('g.node-labels text, .sankey-node text, .sankey text')) {
+      text.setAttribute('fill', palette.text);
+      if ((text as HTMLElement).style) {
+        (text as HTMLElement).style.color = palette.text;
+        (text as HTMLElement).style.fill = palette.text;
+      }
+    }
+  }
+
   const textNodes = Array.from(doc.querySelectorAll('g.node-labels text, .sankey-node text, .sankey text'));
   if (textNodes.length < 2) return;
 
@@ -716,6 +734,53 @@ export function fixRequirementDiagram(doc: Document, palette: PaletteData, _dark
     labelBkg.setAttribute('stroke', palette.border);
     labelBkg.setAttribute('rx', '5');
     labelBkg.setAttribute('ry', '5');
+  }
+}
+
+/**
+ * Enhances Block Diagrams with high-contrast typography, crisp borders, and visible text.
+ */
+export function fixBlockDiagram(doc: Document, palette: PaletteData, _dark: boolean): void {
+  const root = doc.documentElement;
+  const isBlock = root.classList.contains('block-beta') ||
+    root.getAttribute('aria-roledescription') === 'block' ||
+    !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
+  if (!isBlock) return;
+
+  for (const text of doc.querySelectorAll('.block-beta text, svg[aria-roledescription="block"] text, g.block text, .block text, .block-beta .nodeLabel, svg[aria-roledescription="block"] .nodeLabel, .block .nodeLabel, .block-beta span, svg[aria-roledescription="block"] span, .block span, .block-beta p, svg[aria-roledescription="block"] p, .block p')) {
+    text.setAttribute('fill', palette.text);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.color = palette.text;
+      (text as HTMLElement).style.fill = palette.text;
+    }
+  }
+}
+
+/**
+ * Enhances Gantt charts with high-contrast active task text and clearly visible grid date tick labels.
+ */
+export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isGantt = root.classList.contains('gantt') || !!doc.querySelector('.grid .tick, .taskText, .sectionTitle');
+  if (!isGantt) return;
+
+  // Active task text: light blue / light accent fill in dark mode requires dark text (#0f172a)
+  const activeTextColor = dark ? '#0f172a' : '#ffffff';
+  for (const text of doc.querySelectorAll('[class*="activeText"], .taskText.active, .task.active + text')) {
+    text.setAttribute('fill', activeTextColor);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.color = activeTextColor;
+      (text as HTMLElement).style.fill = activeTextColor;
+    }
+  }
+
+  // Section titles, diagram titles, task text outside bars, and date tick marks
+  for (const text of doc.querySelectorAll('.grid .tick text, g.tick text, .tick text, .sectionTitle, .titleText, .taskTextOutsideLeft, .taskTextOutsideRight, .taskTextOutside')) {
+    text.setAttribute('fill', palette.text);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.color = palette.text;
+      (text as HTMLElement).style.fill = palette.text;
+    }
   }
 }
 
@@ -1049,21 +1114,39 @@ export function styleSvg(
     );
   }
 
-  // 1. Flowchart arrow markers (pointEnd / pointStart)
-  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"]')) {
-    marker.setAttribute('markerUnits', 'userSpaceOnUse');
-    marker.setAttribute('markerWidth', '8');
-    marker.setAttribute('markerHeight', '8');
-    marker.setAttribute('viewBox', '0 0 10 10');
-    marker.setAttribute('refY', '5');
-    marker.setAttribute('orient', 'auto');
-    const start = marker.id.endsWith('pointStart');
-    marker.setAttribute('refX', start ? '0' : '10');
-    const path = marker.querySelector('path');
-    if (path) {
-      path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
-      path.setAttribute('stroke-width', '0');
-      path.setAttribute('fill', palette.line);
+  // 1. Flowchart and Block arrow markers (pointEnd / pointStart)
+  for (const marker of doc.querySelectorAll('marker[id$="pointEnd"], marker[id$="pointStart"], marker[id*="pointEnd"], marker[id*="pointStart"]')) {
+    const isBlock = marker.id.toLowerCase().includes('block') || !!doc.querySelector('.block-beta, svg[aria-roledescription="block"], g.block, .block');
+    const start = marker.id.toLowerCase().endsWith('pointstart') || marker.id.toLowerCase().includes('pointstart');
+
+    if (isBlock) {
+      marker.setAttribute('markerUnits', 'userSpaceOnUse');
+      marker.setAttribute('markerWidth', '14');
+      marker.setAttribute('markerHeight', '12');
+      marker.setAttribute('viewBox', '0 0 14 12');
+      marker.setAttribute('refY', '6');
+      marker.setAttribute('orient', 'auto');
+      marker.setAttribute('refX', start ? '1' : '13');
+      const path = marker.querySelector('path');
+      if (path) {
+        path.setAttribute('d', start ? 'M13 1 L1 6 L13 11 Z' : 'M1 1 L13 6 L1 11 Z');
+        path.setAttribute('stroke-width', '0');
+        path.setAttribute('fill', palette.line);
+      }
+    } else {
+      marker.setAttribute('markerUnits', 'userSpaceOnUse');
+      marker.setAttribute('markerWidth', '8');
+      marker.setAttribute('markerHeight', '8');
+      marker.setAttribute('viewBox', '0 0 10 10');
+      marker.setAttribute('refY', '5');
+      marker.setAttribute('orient', 'auto');
+      marker.setAttribute('refX', start ? '0' : '10');
+      const path = marker.querySelector('path');
+      if (path) {
+        path.setAttribute('d', start ? 'M10 0 L0 5 L10 10 Z' : 'M0 0 L10 5 L0 10 Z');
+        path.setAttribute('stroke-width', '0');
+        path.setAttribute('fill', palette.line);
+      }
     }
   }
 
@@ -1158,14 +1241,20 @@ export function styleSvg(
   // Resolve Kanban and cluster header overlaps so column titles are never blocked by cards
   fixClusterHeaderOverlap(doc);
 
-  // Resolve Sankey diagram label overlaps
-  fixSankeyCollisions(doc);
+  // Resolve Sankey diagram label overlaps and gradients
+  fixSankeyCollisions(doc, palette, dark);
 
   // Resolve C4 architecture relationship label overlaps and add clean badge pills
   fixC4RelationshipCollisions(doc, palette);
 
   // Enhance Requirement diagram styles, container fills, and contrast
   fixRequirementDiagram(doc, palette, dark);
+
+  // Enhance Block diagram text readability and contrast
+  fixBlockDiagram(doc, palette, dark);
+
+  // Enhance Gantt chart active task and axis date tick text contrast
+  fixGanttChart(doc, palette, dark);
 
   // Expand viewBox if outer return lanes or routes extend past original dimensions
   const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
