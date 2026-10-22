@@ -42,20 +42,40 @@ export function ancestorPath(edges: readonly PathEdge[], target: string): Ancest
   return { nodes, edges: selected };
 }
 
+interface CachedSvgGraph {
+  edges: PathEdge[];
+  edgeById: Map<string, PathEdge>;
+  interactiveElements: Element[];
+}
+
+const svgGraphCache = new WeakMap<SVGSVGElement, CachedSvgGraph>();
+
+function getSvgGraph(svg: SVGSVGElement): CachedSvgGraph {
+  let cached = svgGraphCache.get(svg);
+  if (!cached) {
+    const paths = Array.from(svg.querySelectorAll('[data-mpe-from][data-mpe-to]'));
+    const edges: PathEdge[] = paths.map(path => ({
+      from: path.getAttribute('data-mpe-from')!,
+      to: path.getAttribute('data-mpe-to')!,
+      id: path.getAttribute('data-id') || path.id,
+      forward: path.getAttribute('data-mpe-forward') === 'true',
+    }));
+    const edgeById = new Map<string, PathEdge>(edges.map(e => [e.id, e]));
+    const interactiveElements = Array.from(svg.querySelectorAll('.node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel'));
+    cached = { edges, edgeById, interactiveElements };
+    svgGraphCache.set(svg, cached);
+  }
+  return cached;
+}
+
 export function highlightAncestors(element: Element): void {
-  const svg = element.closest('svg');
+  const svg = element.closest('svg') as SVGSVGElement | null;
   if (!svg) return;
-  const paths = [...svg.querySelectorAll('[data-mpe-from][data-mpe-to]')];
-  const edges = paths.map(path => ({
-    from: path.getAttribute('data-mpe-from')!,
-    to: path.getAttribute('data-mpe-to')!,
-    id: path.getAttribute('data-id') || path.id,
-    forward: path.getAttribute('data-mpe-forward') === 'true',
-  }));
+  const { edges, edgeById, interactiveElements } = getSvgGraph(svg);
 
   const key = element.getAttribute('data-mpe-key');
   const id = element.getAttribute('data-id') || element.querySelector('[data-id]')?.getAttribute('data-id') || element.id;
-  const edge = key ? null : edges.find(e => e.id === id);
+  const edge = key ? null : (id ? edgeById.get(id) : null);
   if (!key && !edge) return;
 
   const selected = ancestorPath(edges.filter(e => e.forward), key || edge!.from);
@@ -65,10 +85,10 @@ export function highlightAncestors(element: Element): void {
   }
 
   svg.classList.add('mpe-tracing');
-  for (const el of svg.querySelectorAll('.node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel')) {
+  for (const el of interactiveElements) {
     const elKey = el.getAttribute('data-mpe-key');
     const elId = el.getAttribute('data-id') || el.querySelector('[data-id]')?.getAttribute('data-id') || el.id;
-    el.classList.toggle('mpe-on-path', elKey ? selected.nodes.has(elKey) : selected.edges.has(elId));
+    el.classList.toggle('mpe-on-path', elKey ? selected.nodes.has(elKey) : (elId ? selected.edges.has(elId) : false));
   }
 }
 

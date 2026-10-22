@@ -508,19 +508,31 @@ function ancestorPath(edges, target) {
   }
   return { nodes, edges: selected };
 }
+var svgGraphCache = /* @__PURE__ */ new WeakMap();
+function getSvgGraph(svg) {
+  let cached = svgGraphCache.get(svg);
+  if (!cached) {
+    const paths = Array.from(svg.querySelectorAll("[data-mpe-from][data-mpe-to]"));
+    const edges = paths.map((path) => ({
+      from: path.getAttribute("data-mpe-from"),
+      to: path.getAttribute("data-mpe-to"),
+      id: path.getAttribute("data-id") || path.id,
+      forward: path.getAttribute("data-mpe-forward") === "true"
+    }));
+    const edgeById = new Map(edges.map((e) => [e.id, e]));
+    const interactiveElements = Array.from(svg.querySelectorAll(".node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel"));
+    cached = { edges, edgeById, interactiveElements };
+    svgGraphCache.set(svg, cached);
+  }
+  return cached;
+}
 function highlightAncestors(element) {
   const svg = element.closest("svg");
   if (!svg) return;
-  const paths = [...svg.querySelectorAll("[data-mpe-from][data-mpe-to]")];
-  const edges = paths.map((path) => ({
-    from: path.getAttribute("data-mpe-from"),
-    to: path.getAttribute("data-mpe-to"),
-    id: path.getAttribute("data-id") || path.id,
-    forward: path.getAttribute("data-mpe-forward") === "true"
-  }));
+  const { edges, edgeById, interactiveElements } = getSvgGraph(svg);
   const key = element.getAttribute("data-mpe-key");
   const id = element.getAttribute("data-id") || element.querySelector("[data-id]")?.getAttribute("data-id") || element.id;
-  const edge = key ? null : edges.find((e) => e.id === id);
+  const edge = key ? null : id ? edgeById.get(id) : null;
   if (!key && !edge) return;
   const selected = ancestorPath(edges.filter((e) => e.forward), key || edge.from);
   if (edge) {
@@ -528,10 +540,10 @@ function highlightAncestors(element) {
     selected.edges.add(edge.id);
   }
   svg.classList.add("mpe-tracing");
-  for (const el of svg.querySelectorAll(".node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel")) {
+  for (const el of interactiveElements) {
     const elKey = el.getAttribute("data-mpe-key");
     const elId = el.getAttribute("data-id") || el.querySelector("[data-id]")?.getAttribute("data-id") || el.id;
-    el.classList.toggle("mpe-on-path", elKey ? selected.nodes.has(elKey) : selected.edges.has(elId));
+    el.classList.toggle("mpe-on-path", elKey ? selected.nodes.has(elKey) : elId ? selected.edges.has(elId) : false);
   }
 }
 function createPathController(doc, getSettings, timers) {
@@ -1467,9 +1479,10 @@ function styleSvg(svg, direction, settings, palette, dark) {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   if (doc.querySelector("parsererror")) return svg;
   const root = doc.documentElement;
+  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
   const layoutAxis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
   const layoutSign = /^(BT|RL)$/.test(direction) ? -1 : 1;
-  const layoutNodes = [...doc.querySelectorAll("g.node")].map((node) => {
+  const layoutNodes = isFlowchart ? [...doc.querySelectorAll("g.node")].map((node) => {
     const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
     const t = (node.getAttribute("transform") || "").match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
     return {
@@ -1478,52 +1491,66 @@ function styleSvg(svg, direction, settings, palette, dark) {
       center: t ? [Number(t[1]), Number(t[2])] : null,
       incoming: key ? nodeLimit(doc, key, direction, false) : NaN
     };
-  }).filter((n) => !!n.key && !!n.center);
-  const layoutByKey = new Map(layoutNodes.map((n) => [n.key, n]));
-  const layoutEdges = [...doc.querySelectorAll("path.flowchart-link, .edgePath path.path")].map((path) => {
+  }).filter((n) => !!n.key && !!n.center) : [];
+  const layoutByKey = isFlowchart ? new Map(layoutNodes.map((n) => [n.key, n])) : /* @__PURE__ */ new Map();
+  const layoutEdges = isFlowchart ? [...doc.querySelectorAll("path.flowchart-link, .edgePath path.path")].map((path) => {
     const edge = resolveEdge(doc, path);
     if (edge) return { from: layoutByKey.get(edge[1]), to: layoutByKey.get(edge[2]) };
-  }).filter((e) => !!e?.from && !!e.to);
-  const alignedTargets = /* @__PURE__ */ new Set();
-  for (const node of doc.querySelectorAll("g.node")) {
-    const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
-    if (key) {
-      node.setAttribute("data-mpe-key", key);
-      node.setAttribute("tabindex", "0");
-    }
-    const polygon = node.querySelector("polygon");
-    const points = (polygon?.getAttribute("points") || "").trim().split(/\s+/).map((p) => p.split(",").map(Number)).filter((p, i, all) => !i || p[0] !== all[0][0] || p[1] !== all[0][1]);
-    if (!compactLayout || points.length !== 4) continue;
-    const cx = points.reduce((s, p) => s + p[0], 0) / 4;
-    const cy = points.reduce((s, p) => s + p[1], 0) / 4;
-    const hw = Math.max(...points.map((p) => Math.abs(p[0] - cx)));
-    const hh = Math.max(...points.map((p) => Math.abs(p[1] - cy)));
-    const label = node.querySelector("foreignObject");
-    const labelHeight = label ? Number(label.getAttribute("height")) : 0;
-    const widthRatio = label ? Number(label.getAttribute("width")) / (2 * hw) : 1;
-    if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
-      const needed = Number(label.getAttribute("height")) / (2 * hh) / (0.99 - widthRatio);
-      const scale = Math.min(1, Math.max(0.9, needed));
-      polygon.setAttribute("points", points.map((p) => `${p[0]},${cy + (p[1] - cy) * scale}`).join(" "));
+  }).filter((e) => !!e?.from && !!e.to) : [];
+  const edgesBySource = /* @__PURE__ */ new Map();
+  if (isFlowchart) {
+    for (const edge of layoutEdges) {
+      let list = edgesBySource.get(edge.from);
+      if (!list) {
+        list = [];
+        edgesBySource.set(edge.from, list);
+      }
+      list.push(edge);
     }
   }
-  for (const source of compactLayout ? layoutNodes : []) {
-    const targets = [...new Set(layoutEdges.filter((e) => e.from === source && layoutSign * (e.to.center[layoutAxis] - source.center[layoutAxis]) > 0).map((e) => e.to))];
-    if (targets.length < 2) continue;
-    const sameCenters = targets.every((n) => Math.abs(n.center[layoutAxis] - targets[0].center[layoutAxis]) <= 2);
-    const sameIncomingSides = targets.every((n) => Math.abs((n.incoming ?? NaN) - (targets[0].incoming ?? NaN)) <= 2);
-    if (!sameCenters && !sameIncomingSides) continue;
-    const limits = targets.map((n) => nodeLimit(doc, n.key, direction, false));
-    if (!limits.every((limit) => limit !== void 0 && Number.isFinite(limit))) continue;
-    const level = layoutSign > 0 ? Math.min(...limits) : Math.max(...limits);
-    targets.forEach((n, i) => {
-      if (alignedTargets.has(n.key)) return;
-      const delta = [0, 0];
-      delta[layoutAxis] = level - limits[i];
-      n.center[layoutAxis] += delta[layoutAxis];
-      n.node.setAttribute("transform", `translate(${n.center.join(",")})`);
-      alignedTargets.add(n.key);
-    });
+  const alignedTargets = /* @__PURE__ */ new Set();
+  if (isFlowchart) {
+    for (const node of doc.querySelectorAll("g.node")) {
+      const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
+      if (key) {
+        node.setAttribute("data-mpe-key", key);
+        node.setAttribute("tabindex", "0");
+      }
+      const polygon = node.querySelector("polygon");
+      const points = (polygon?.getAttribute("points") || "").trim().split(/\s+/).map((p) => p.split(",").map(Number)).filter((p, i, all) => !i || p[0] !== all[0][0] || p[1] !== all[0][1]);
+      if (!compactLayout || points.length !== 4) continue;
+      const cx = points.reduce((s, p) => s + p[0], 0) / 4;
+      const cy = points.reduce((s, p) => s + p[1], 0) / 4;
+      const hw = Math.max(...points.map((p) => Math.abs(p[0] - cx)));
+      const hh = Math.max(...points.map((p) => Math.abs(p[1] - cy)));
+      const label = node.querySelector("foreignObject");
+      const labelHeight = label ? Number(label.getAttribute("height")) : 0;
+      const widthRatio = label ? Number(label.getAttribute("width")) / (2 * hw) : 1;
+      if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
+        const needed = Number(label.getAttribute("height")) / (2 * hh) / (0.99 - widthRatio);
+        const scale = Math.min(1, Math.max(0.9, needed));
+        polygon.setAttribute("points", points.map((p) => `${p[0]},${cy + (p[1] - cy) * scale}`).join(" "));
+      }
+    }
+    for (const source of compactLayout ? layoutNodes : []) {
+      const outgoingList = edgesBySource.get(source) || [];
+      const targets = [...new Set(outgoingList.filter((e) => layoutSign * (e.to.center[layoutAxis] - source.center[layoutAxis]) > 0).map((e) => e.to))];
+      if (targets.length < 2) continue;
+      const sameCenters = targets.every((n) => Math.abs(n.center[layoutAxis] - targets[0].center[layoutAxis]) <= 2);
+      const sameIncomingSides = targets.every((n) => Math.abs((n.incoming ?? NaN) - (targets[0].incoming ?? NaN)) <= 2);
+      if (!sameCenters && !sameIncomingSides) continue;
+      const limits = targets.map((n) => nodeLimit(doc, n.key, direction, false));
+      if (!limits.every((limit) => limit !== void 0 && Number.isFinite(limit))) continue;
+      const level = layoutSign > 0 ? Math.min(...limits) : Math.max(...limits);
+      targets.forEach((n, i) => {
+        if (alignedTargets.has(n.key)) return;
+        const delta = [0, 0];
+        delta[layoutAxis] = level - limits[i];
+        n.center[layoutAxis] += delta[layoutAxis];
+        n.node.setAttribute("transform", `translate(${n.center.join(",")})`);
+        alignedTargets.add(n.key);
+      });
+    }
   }
   const number = "[-+]?(?:\\d*\\.\\d+|\\d+\\.?\\d*)(?:[eE][-+]?\\d+)?";
   const segment = new RegExp(`([ML])\\s*(${number})[\\s,]+(${number})`, "g");
@@ -1596,10 +1623,9 @@ function styleSvg(svg, direction, settings, palette, dark) {
       }
     }
   }
-  if (compactLayout) {
+  if (compactLayout && isFlowchart) {
     equalizeCardWidths(doc, direction);
   }
-  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
   if (isFlowchart) {
     for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
       const d = path.getAttribute("d") || "";
@@ -1697,24 +1723,24 @@ function styleSvg(svg, direction, settings, palette, dark) {
       continue;
     }
     const key = label.getAttribute("data-id") || label.querySelector("[data-id]")?.getAttribute("data-id") || label.id;
-    let position2 = key ? labelPositions.get(key) : void 0;
-    if (!position2 && key) {
+    let position = key ? labelPositions.get(key) : void 0;
+    if (!position && key) {
       for (const [posKey, pos] of labelPositions) {
         if (posKey && (key.startsWith(posKey) || posKey.startsWith(key))) {
-          position2 = pos;
+          position = pos;
           break;
         }
       }
     }
-    if (position2 && Number.isFinite(position2[0]) && Number.isFinite(position2[1])) {
+    if (position && Number.isFinite(position[0]) && Number.isFinite(position[1])) {
       const fo = label.querySelector("foreignObject");
       const rect = label.querySelector("rect");
       const measuredWidth = fo ? parseFloat(fo.getAttribute("width") || "0") : rect ? parseFloat(rect.getAttribute("width") || "0") : 0;
       const width = measuredWidth > 0 ? measuredWidth : Math.max(30, text.length * 8 + 16);
       placedLabels.push({
         el: label,
-        x: position2[0],
-        y: position2[1],
+        x: position[0],
+        y: position[1],
         width,
         height: 24
       });
@@ -1868,18 +1894,20 @@ function styleSvg(svg, direction, settings, palette, dark) {
     }
     if (Math.abs(parseFloat(root.style.maxWidth) - width) < 1) root.style.maxWidth = `${sizes[0]}px`;
   }
-  const hierarchyNodes = [...doc.querySelectorAll("g.node[data-mpe-key]")];
-  const posAxis = /^(TD|TB|BT)$/.test(direction) ? 2 : 1;
-  const position = (node) => Number((node.getAttribute("transform") || "").match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/)?.[posAxis]);
-  const hierarchyByKey = new Map(hierarchyNodes.map((n) => [n.getAttribute("data-mpe-key"), n]));
-  for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
-    const edge = resolveEdge(doc, path);
-    if (!edge || !direction) continue;
-    const from = hierarchyByKey.get(edge[1]), to = hierarchyByKey.get(edge[2]);
-    if (!from || !to) continue;
-    path.setAttribute("data-mpe-from", edge[1]);
-    path.setAttribute("data-mpe-to", edge[2]);
-    path.setAttribute("data-mpe-forward", String(sign * (position(to) - position(from)) > 0));
+  if (isFlowchart) {
+    const hierarchyNodes = [...doc.querySelectorAll("g.node[data-mpe-key]")];
+    const posAxis = /^(TD|TB|BT)$/.test(direction) ? 2 : 1;
+    const position = (node) => Number((node.getAttribute("transform") || "").match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/)?.[posAxis]);
+    const hierarchyByKey = new Map(hierarchyNodes.map((n) => [n.getAttribute("data-mpe-key"), n]));
+    for (const path of doc.querySelectorAll("path.flowchart-link, .edgePath path.path")) {
+      const edge = resolveEdge(doc, path);
+      if (!edge || !direction) continue;
+      const from = hierarchyByKey.get(edge[1]), to = hierarchyByKey.get(edge[2]);
+      if (!from || !to) continue;
+      path.setAttribute("data-mpe-from", edge[1]);
+      path.setAttribute("data-mpe-to", edge[2]);
+      path.setAttribute("data-mpe-forward", String(sign * (position(to) - position(from)) > 0));
+    }
   }
   if (settings.nodeRadius > 0) {
     for (const rect of doc.querySelectorAll(".node rect:not(.labelBkg)")) {
@@ -2560,6 +2588,8 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       const cacheKey = `${dark ? "1" : "0"}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
       const cached = cache.get(cacheKey);
       if (cached) {
+        cache.delete(cacheKey);
+        cache.set(cacheKey, cached);
         const cachedIdMatch = cached.svg.match(/^<svg\s+id="([^"]*)"/);
         const cachedId = cachedIdMatch?.[1];
         const currentIdSvg = cachedId && cachedId !== id ? cached.svg.split(cachedId).join(id) : cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id}"`);

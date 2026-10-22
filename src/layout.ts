@@ -798,10 +798,11 @@ export function styleSvg(
   if (doc.querySelector('parsererror')) return svg;
 
   const root = doc.documentElement as unknown as SVGSVGElement;
+  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
   const layoutAxis = /^(TD|TB|BT)$/.test(direction) ? 1 : 0;
   const layoutSign = /^(BT|RL)$/.test(direction) ? -1 : 1;
 
-  const layoutNodes = [...doc.querySelectorAll('g.node')].map(node => {
+  const layoutNodes = isFlowchart ? [...doc.querySelectorAll('g.node')].map(node => {
     const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
     const t = (node.getAttribute('transform') || '').match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
     return {
@@ -810,60 +811,76 @@ export function styleSvg(
       center: t ? [Number(t[1]), Number(t[2])] as Point : null,
       incoming: key ? nodeLimit(doc, key, direction, false) : NaN,
     };
-  }).filter((n): n is LayoutNode => !!n.key && !!n.center);
+  }).filter((n): n is LayoutNode => !!n.key && !!n.center) : [];
 
-  const layoutByKey = new Map(layoutNodes.map(n => [n.key, n]));
-  const layoutEdges = [...doc.querySelectorAll('path.flowchart-link, .edgePath path.path')].map(path => {
+  const layoutByKey = isFlowchart ? new Map(layoutNodes.map(n => [n.key, n])) : new Map<string, LayoutNode>();
+  const layoutEdges = isFlowchart ? [...doc.querySelectorAll('path.flowchart-link, .edgePath path.path')].map(path => {
     const edge = resolveEdge(doc, path);
     if (edge) return { from: layoutByKey.get(edge[1]), to: layoutByKey.get(edge[2]) };
-  }).filter((e): e is LayoutEdge => !!e?.from && !!e.to);
+  }).filter((e): e is LayoutEdge => !!e?.from && !!e.to) : [];
 
-  const alignedTargets = new Set<string>();
-
-  for (const node of doc.querySelectorAll('g.node')) {
-    const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
-    if (key) {
-      node.setAttribute('data-mpe-key', key);
-      node.setAttribute('tabindex', '0');
-    }
-    const polygon = node.querySelector('polygon');
-    const points = (polygon?.getAttribute('points') || '').trim().split(/\s+/).map(p => p.split(',').map(Number))
-      .filter((p, i, all) => !i || p[0] !== all[0]![0] || p[1] !== all[0]![1]);
-    if (!compactLayout || points.length !== 4) continue;
-    const cx = points.reduce((s, p) => s + p[0]!, 0) / 4;
-    const cy = points.reduce((s, p) => s + p[1]!, 0) / 4;
-    const hw = Math.max(...points.map(p => Math.abs(p[0]! - cx)));
-    const hh = Math.max(...points.map(p => Math.abs(p[1]! - cy)));
-    const label = node.querySelector('foreignObject');
-    const labelHeight = label ? Number(label.getAttribute('height')) : 0;
-    const widthRatio = label ? Number(label.getAttribute('width')) / (2 * hw) : 1;
-    // Only apply gentle compaction when diamond has substantial excess vertical headroom (> 2x text height)
-    if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
-      const needed = Number(label.getAttribute('height')) / (2 * hh) / (0.99 - widthRatio);
-      const scale = Math.min(1, Math.max(0.90, needed));
-      polygon!.setAttribute('points', points.map(p => `${p[0]!},${cy + (p[1]! - cy) * scale}`).join(' '));
+  // Pre-index edges by source node for O(1) branch lookups
+  const edgesBySource = new Map<LayoutNode, LayoutEdge[]>();
+  if (isFlowchart) {
+    for (const edge of layoutEdges) {
+      let list = edgesBySource.get(edge.from);
+      if (!list) {
+        list = [];
+        edgesBySource.set(edge.from, list);
+      }
+      list.push(edge);
     }
   }
 
-  // Align decision branches leaving same condition
-  for (const source of compactLayout ? layoutNodes : []) {
-    const targets = [...new Set(layoutEdges.filter(e => e.from === source &&
-      layoutSign * (e.to.center[layoutAxis] - source.center[layoutAxis]) > 0).map(e => e.to))];
-    if (targets.length < 2) continue;
-    const sameCenters = targets.every(n => Math.abs(n.center[layoutAxis] - targets[0]!.center[layoutAxis]) <= 2);
-    const sameIncomingSides = targets.every(n => Math.abs((n.incoming ?? NaN) - (targets[0]!.incoming ?? NaN)) <= 2);
-    if (!sameCenters && !sameIncomingSides) continue;
-    const limits = targets.map(n => nodeLimit(doc, n.key, direction, false));
-    if (!limits.every((limit): limit is number => limit !== undefined && Number.isFinite(limit))) continue;
-    const level = layoutSign > 0 ? Math.min(...limits) : Math.max(...limits);
-    targets.forEach((n, i) => {
-      if (alignedTargets.has(n.key)) return;
-      const delta: Point = [0, 0];
-      delta[layoutAxis] = level - limits[i]!;
-      n.center[layoutAxis] += delta[layoutAxis];
-      n.node.setAttribute('transform', `translate(${n.center.join(',')})`);
-      alignedTargets.add(n.key);
-    });
+  const alignedTargets = new Set<string>();
+
+  if (isFlowchart) {
+    for (const node of doc.querySelectorAll('g.node')) {
+      const key = node.id.match(/(?:^|-)flowchart-(.+)-\d+$/)?.[1];
+      if (key) {
+        node.setAttribute('data-mpe-key', key);
+        node.setAttribute('tabindex', '0');
+      }
+      const polygon = node.querySelector('polygon');
+      const points = (polygon?.getAttribute('points') || '').trim().split(/\s+/).map(p => p.split(',').map(Number))
+        .filter((p, i, all) => !i || p[0] !== all[0]![0] || p[1] !== all[0]![1]);
+      if (!compactLayout || points.length !== 4) continue;
+      const cx = points.reduce((s, p) => s + p[0]!, 0) / 4;
+      const cy = points.reduce((s, p) => s + p[1]!, 0) / 4;
+      const hw = Math.max(...points.map(p => Math.abs(p[0]! - cx)));
+      const hh = Math.max(...points.map(p => Math.abs(p[1]! - cy)));
+      const label = node.querySelector('foreignObject');
+      const labelHeight = label ? Number(label.getAttribute('height')) : 0;
+      const widthRatio = label ? Number(label.getAttribute('width')) / (2 * hw) : 1;
+      // Only apply gentle compaction when diamond has substantial excess vertical headroom (> 2x text height)
+      if (label && labelHeight > 0 && 2 * hh > labelHeight * 2.2 && widthRatio < 0.95) {
+        const needed = Number(label.getAttribute('height')) / (2 * hh) / (0.99 - widthRatio);
+        const scale = Math.min(1, Math.max(0.90, needed));
+        polygon!.setAttribute('points', points.map(p => `${p[0]!},${cy + (p[1]! - cy) * scale}`).join(' '));
+      }
+    }
+
+    // Align decision branches leaving same condition
+    for (const source of compactLayout ? layoutNodes : []) {
+      const outgoingList = edgesBySource.get(source) || [];
+      const targets = [...new Set(outgoingList.filter(e =>
+        layoutSign * (e.to.center[layoutAxis] - source.center[layoutAxis]) > 0).map(e => e.to))];
+      if (targets.length < 2) continue;
+      const sameCenters = targets.every(n => Math.abs(n.center[layoutAxis] - targets[0]!.center[layoutAxis]) <= 2);
+      const sameIncomingSides = targets.every(n => Math.abs((n.incoming ?? NaN) - (targets[0]!.incoming ?? NaN)) <= 2);
+      if (!sameCenters && !sameIncomingSides) continue;
+      const limits = targets.map(n => nodeLimit(doc, n.key, direction, false));
+      if (!limits.every((limit): limit is number => limit !== undefined && Number.isFinite(limit))) continue;
+      const level = layoutSign > 0 ? Math.min(...limits) : Math.max(...limits);
+      targets.forEach((n, i) => {
+        if (alignedTargets.has(n.key)) return;
+        const delta: Point = [0, 0];
+        delta[layoutAxis] = level - limits[i]!;
+        n.center[layoutAxis] += delta[layoutAxis];
+        n.node.setAttribute('transform', `translate(${n.center.join(',')})`);
+        alignedTargets.add(n.key);
+      });
+    }
   }
 
   const number = '[-+]?(?:\\d*\\.\\d+|\\d+\\.?\\d*)(?:[eE][-+]?\\d+)?';
@@ -949,11 +966,9 @@ export function styleSvg(
   }
 
   // Equalize card widths in the same rank/layer for neat, clean block alignment
-  if (compactLayout) {
+  if (compactLayout && isFlowchart) {
     equalizeCardWidths(doc, direction);
   }
-
-  const isFlowchart = Boolean(direction && /^(TD|TB|BT|LR|RL)$/.test(direction));
 
   // Orthogonal connector routing and corner rounding (flowchart-only)
   if (isFlowchart) {
@@ -1272,20 +1287,22 @@ export function styleSvg(
     if (Math.abs(parseFloat(root.style.maxWidth) - width) < 1) root.style.maxWidth = `${sizes[0]}px`;
   }
 
-  // Set hierarchy data attributes for path highlighting traversal
-  const hierarchyNodes = [...doc.querySelectorAll('g.node[data-mpe-key]')];
-  const posAxis = /^(TD|TB|BT)$/.test(direction) ? 2 : 1;
-  const position = (node: Element) => Number((node.getAttribute('transform') || '').match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/)?.[posAxis]);
-  const hierarchyByKey = new Map(hierarchyNodes.map(n => [n.getAttribute('data-mpe-key'), n]));
+  if (isFlowchart) {
+    // Set hierarchy data attributes for path highlighting traversal
+    const hierarchyNodes = [...doc.querySelectorAll('g.node[data-mpe-key]')];
+    const posAxis = /^(TD|TB|BT)$/.test(direction) ? 2 : 1;
+    const position = (node: Element) => Number((node.getAttribute('transform') || '').match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/)?.[posAxis]);
+    const hierarchyByKey = new Map(hierarchyNodes.map(n => [n.getAttribute('data-mpe-key'), n]));
 
-  for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
-    const edge = resolveEdge(doc, path);
-    if (!edge || !direction) continue;
-    const from = hierarchyByKey.get(edge[1]), to = hierarchyByKey.get(edge[2]);
-    if (!from || !to) continue;
-    path.setAttribute('data-mpe-from', edge[1]);
-    path.setAttribute('data-mpe-to', edge[2]);
-    path.setAttribute('data-mpe-forward', String(sign * (position(to) - position(from)) > 0));
+    for (const path of doc.querySelectorAll('path.flowchart-link, .edgePath path.path')) {
+      const edge = resolveEdge(doc, path);
+      if (!edge || !direction) continue;
+      const from = hierarchyByKey.get(edge[1]), to = hierarchyByKey.get(edge[2]);
+      if (!from || !to) continue;
+      path.setAttribute('data-mpe-from', edge[1]);
+      path.setAttribute('data-mpe-to', edge[2]);
+      path.setAttribute('data-mpe-forward', String(sign * (position(to) - position(from)) > 0));
+    }
   }
 
   // Apply corner rounding to rectangles

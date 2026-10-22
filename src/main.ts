@@ -123,6 +123,10 @@ export default class MermaidGeniePlugin extends Plugin {
       const cacheKey = `${dark ? '1' : '0'}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
       const cached = cache.get(cacheKey);
       if (cached) {
+        // True LRU: refresh entry order in Map
+        cache.delete(cacheKey);
+        cache.set(cacheKey, cached);
+
         const cachedIdMatch = cached.svg.match(/^<svg\s+id="([^"]*)"/);
         const cachedId = cachedIdMatch?.[1];
         const currentIdSvg = cachedId && cachedId !== id
