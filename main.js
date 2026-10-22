@@ -1351,17 +1351,54 @@ function fixSankeyCollisions(doc, palette, dark) {
 }
 function fixC4RelationshipCollisions(doc, palette) {
   const relLabels = Array.from(
-    doc.querySelectorAll('.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"]')
+    doc.querySelectorAll(
+      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
+    )
   );
   const labelItems = [];
   for (const el of relLabels) {
-    const x = parseFloat(el.getAttribute("x") || "0");
-    const y = parseFloat(el.getAttribute("y") || "0");
+    if (el.getAttribute("data-c4-fixed") === "true") continue;
+    if (el.closest(".node, .c4-shape, .label-container")) continue;
+    const rawX = el.getAttribute("x");
+    const rawY = el.getAttribute("y");
+    const x = parseFloat(rawX || "0");
+    const y = parseFloat(rawY || "0");
     if (!Number.isFinite(x) || !Number.isFinite(y) || x === 0 && y === 0) continue;
-    const text = (el.textContent || "").trim();
-    if (!text) continue;
-    const width = Math.max(text.length * 7.5, 60);
-    labelItems.push({ el, x, y, width, height: 24 });
+    const fullText = (el.textContent || "").trim();
+    if (!fullText) continue;
+    el.setAttribute("data-c4-fixed", "true");
+    el.setAttribute("fill", palette.text);
+    if (el.style) {
+      el.style.fill = palette.text;
+      el.style.color = palette.text;
+    }
+    let width = 0;
+    let height = 24;
+    if (fullText.length > 22 && fullText.includes(" ")) {
+      const words = fullText.split(/\s+/);
+      const mid = Math.ceil(words.length / 2);
+      const line1 = words.slice(0, mid).join(" ");
+      const line2 = words.slice(mid).join(" ");
+      width = Math.max(line1.length, line2.length) * 7.5 + 24;
+      height = 36;
+      el.textContent = "";
+      const tspan1 = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
+      tspan1.setAttribute("x", String(x));
+      tspan1.setAttribute("dy", "-0.55em");
+      tspan1.setAttribute("text-anchor", "middle");
+      tspan1.textContent = line1;
+      const tspan2 = doc.createElementNS("http://www.w3.org/2000/svg", "tspan");
+      tspan2.setAttribute("x", String(x));
+      tspan2.setAttribute("dy", "1.2em");
+      tspan2.setAttribute("text-anchor", "middle");
+      tspan2.textContent = line2;
+      el.appendChild(tspan1);
+      el.appendChild(tspan2);
+    } else {
+      width = Math.max(fullText.length * 7.5, 60);
+      height = 24;
+    }
+    labelItems.push({ el, x, y, width, height });
   }
   for (let i = 0; i < labelItems.length; i++) {
     for (let j = i + 1; j < labelItems.length; j++) {
@@ -1369,7 +1406,7 @@ function fixC4RelationshipCollisions(doc, palette) {
       const b = labelItems[j];
       const hDist = Math.abs(a.x - b.x);
       const vDist = Math.abs(a.y - b.y);
-      const minHDist = (a.width + b.width) / 2 + 10;
+      const minHDist = Math.max((a.width + b.width) / 2 + 20, 180);
       if (vDist < 25 && hDist < minHDist) {
         if (a.y <= b.y) {
           a.y -= 22;
@@ -1380,6 +1417,12 @@ function fixC4RelationshipCollisions(doc, palette) {
         }
         a.el.setAttribute("y", String(a.y));
         b.el.setAttribute("y", String(b.y));
+        for (const tspan of a.el.querySelectorAll("tspan")) {
+          tspan.setAttribute("x", String(a.x));
+        }
+        for (const tspan of b.el.querySelectorAll("tspan")) {
+          tspan.setAttribute("x", String(b.x));
+        }
       }
     }
   }
@@ -1392,15 +1435,15 @@ function fixC4RelationshipCollisions(doc, palette) {
     const rect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
     rect.classList.add("c4-rel-pill");
     rect.setAttribute("x", String(item.x - item.width / 2 - padX));
-    rect.setAttribute("y", String(item.y - 12 - padY));
+    rect.setAttribute("y", String(item.y - item.height / 2 - padY));
     rect.setAttribute("width", String(item.width + padX * 2));
-    rect.setAttribute("height", String(24 + padY));
-    rect.setAttribute("rx", "4");
-    rect.setAttribute("ry", "4");
+    rect.setAttribute("height", String(item.height + padY * 2));
+    rect.setAttribute("rx", "6");
+    rect.setAttribute("ry", "6");
     rect.setAttribute("fill", palette.label);
     rect.setAttribute("stroke", palette.border);
     rect.setAttribute("stroke-width", "1px");
-    rect.setAttribute("opacity", "0.94");
+    rect.setAttribute("opacity", "0.96");
     parent.insertBefore(rect, item.el);
   }
 }
@@ -1632,7 +1675,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
       if (!d) continue;
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", palette.line);
-      path.setAttribute("stroke-width", "1.5px");
+      path.setAttribute("stroke-width", "1.53px");
       const edge = resolveEdge(doc, path);
       let routed = null;
       let points = routePoints(d);
@@ -1710,7 +1753,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
       }
       path.setAttribute("fill", "none");
       path.setAttribute("stroke", palette.line);
-      path.setAttribute("stroke-width", "1.5px");
+      path.setAttribute("stroke-width", "1.53px");
     }
   }
   const placedLabels = [];
@@ -1785,8 +1828,8 @@ function styleSvg(svg, direction, settings, palette, dark) {
       }
     } else {
       marker.setAttribute("markerUnits", "userSpaceOnUse");
-      marker.setAttribute("markerWidth", "8");
-      marker.setAttribute("markerHeight", "8");
+      marker.setAttribute("markerWidth", "8.2");
+      marker.setAttribute("markerHeight", "8.2");
       marker.setAttribute("viewBox", "0 0 10 10");
       marker.setAttribute("refY", "5");
       marker.setAttribute("orient", "auto");
@@ -1803,8 +1846,8 @@ function styleSvg(svg, direction, settings, palette, dark) {
     const isStart = marker.id.toLowerCase().includes("barbstart");
     const isMargin = marker.id.toLowerCase().includes("margin");
     marker.setAttribute("markerUnits", "userSpaceOnUse");
-    marker.setAttribute("markerWidth", "14");
-    marker.setAttribute("markerHeight", "10");
+    marker.setAttribute("markerWidth", "14.2");
+    marker.setAttribute("markerHeight", "10.2");
     marker.setAttribute("viewBox", "0 0 20 14");
     marker.setAttribute("refX", isStart ? "0" : isMargin ? "17" : "19");
     marker.setAttribute("refY", "7");
@@ -1821,7 +1864,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
   for (const path of doc.querySelectorAll("path.transition, .edgePaths path.transition, .stateGroup .transition")) {
     path.setAttribute("fill", "none");
     path.setAttribute("stroke", palette.line);
-    path.setAttribute("stroke-width", "1.5px");
+    path.setAttribute("stroke-width", "1.53px");
   }
   for (const node of doc.querySelectorAll("g.node")) {
     const polygon = node.querySelector("polygon");
@@ -2492,6 +2535,279 @@ function transpileTreeView(source) {
   }
   return output.join("\n");
 }
+function transpileCynefin(source) {
+  const lines = cleanLines(source);
+  let title = "Cynefin Framework";
+  const domains = {
+    complex: [],
+    complicated: [],
+    chaotic: [],
+    clear: [],
+    disorder: []
+  };
+  let currentDomain = null;
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\s*cynefin(?:-beta)?\b/i.test(trimmed)) continue;
+    const titleMatch = trimmed.match(/^title\s+(.*)$/i);
+    if (titleMatch) {
+      title = titleMatch[1]?.trim() || title;
+      continue;
+    }
+    const domainMatch = trimmed.match(/^(complex|complicated|chaotic|clear|simple|disorder|aporia)\b/i);
+    if (domainMatch) {
+      let d = domainMatch[1].toLowerCase();
+      if (d === "simple") d = "clear";
+      if (d === "aporia") d = "disorder";
+      currentDomain = d;
+      continue;
+    }
+    if (currentDomain && domains[currentDomain]) {
+      const cleanItem = trimmed.replace(/^["']|["']$/g, "").trim();
+      if (cleanItem) {
+        domains[currentDomain].push(cleanItem);
+      }
+    }
+  }
+  const output = ["flowchart TD"];
+  output.push(`    subgraph Cynefin ["Cynefin Framework: ${title}"]`);
+  output.push("        direction TB");
+  output.push('        subgraph TopRow [" "]');
+  output.push("            direction LR");
+  output.push('            subgraph Complex ["\u{1F300} Complex<br/><i>Probe \xB7 Sense \xB7 Respond</i>"]');
+  if (domains.complex.length === 0) {
+    output.push('                c_empty["(No active items)"]');
+  } else {
+    domains.complex.forEach((item, idx) => {
+      output.push(`                c_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push("            end");
+  output.push('            subgraph Complicated ["\u{1F50D} Complicated<br/><i>Sense \xB7 Analyze \xB7 Respond</i>"]');
+  if (domains.complicated.length === 0) {
+    output.push('                comp_empty["(No active items)"]');
+  } else {
+    domains.complicated.forEach((item, idx) => {
+      output.push(`                comp_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push("            end");
+  output.push("        end");
+  output.push('        subgraph BottomRow [" "]');
+  output.push("            direction LR");
+  output.push('            subgraph Chaotic ["\u26A1 Chaotic<br/><i>Act \xB7 Sense \xB7 Respond</i>"]');
+  if (domains.chaotic.length === 0) {
+    output.push('                ch_empty["(No active items)"]');
+  } else {
+    domains.chaotic.forEach((item, idx) => {
+      output.push(`                ch_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push("            end");
+  output.push('            subgraph Clear ["\u2705 Clear<br/><i>Sense \xB7 Categorize \xB7 Respond</i>"]');
+  if (domains.clear.length === 0) {
+    output.push('                cl_empty["(No active items)"]');
+  } else {
+    domains.clear.forEach((item, idx) => {
+      output.push(`                cl_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push("            end");
+  output.push("        end");
+  output.push("        TopRow ~~~ BottomRow");
+  if (domains.disorder.length > 0) {
+    output.push('        subgraph Disorder ["\u2753 Disorder / Aporia"]');
+    domains.disorder.forEach((item, idx) => {
+      output.push(`            dis_${idx + 1}["${item}"]`);
+    });
+    output.push("        end");
+    output.push("        BottomRow ~~~ Disorder");
+  }
+  output.push("    end");
+  return output.join("\n");
+}
+function transpileWardley(source) {
+  const lines = cleanLines(source);
+  let title = "Knowledge Map";
+  const nodes = [];
+  const links = [];
+  function getEvolutionBadge(evo) {
+    if (evo < 0.25) return "\u{1F331} Genesis";
+    if (evo < 0.5) return "\u{1F6E0}\uFE0F Custom-Built";
+    if (evo < 0.75) return "\u{1F4E6} Product";
+    return "\u26A1 Commodity";
+  }
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\s*wardley(?:-beta)?\b/i.test(trimmed)) continue;
+    const titleMatch = trimmed.match(/^title\s+(.*)$/i);
+    if (titleMatch) {
+      title = titleMatch[1]?.trim() || title;
+      continue;
+    }
+    const anchorMatch = trimmed.match(/^anchor\s+([A-Za-z0-9_]+)(?:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\])?/i);
+    if (anchorMatch) {
+      const id = anchorMatch[1];
+      const vis = anchorMatch[2] ? parseFloat(anchorMatch[2]) : 0.95;
+      const evo = anchorMatch[3] ? parseFloat(anchorMatch[3]) : 0.6;
+      nodes.push({ id, name: id, isAnchor: true, vis, evo });
+      continue;
+    }
+    const compMatch = trimmed.match(/^component\s+([A-Za-z0-9_]+)(?:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\])?/i);
+    if (compMatch) {
+      const id = compMatch[1];
+      const vis = compMatch[2] ? parseFloat(compMatch[2]) : 0.5;
+      const evo = compMatch[3] ? parseFloat(compMatch[3]) : 0.5;
+      nodes.push({ id, name: id, isAnchor: false, vis, evo });
+      continue;
+    }
+    const linkMatch = trimmed.match(/^([A-Za-z0-9_]+)\s*--?>\s*([A-Za-z0-9_]+)(?:\s*\[?["']?(.*?)["']?\]?)?$/);
+    if (linkMatch) {
+      const from = linkMatch[1];
+      const to = linkMatch[2];
+      const label = linkMatch[3]?.trim();
+      links.push({ from, to, label: label || void 0 });
+      continue;
+    }
+  }
+  const output = ["flowchart TD"];
+  output.push(`    subgraph Wardley ["Wardley Map: ${title}"]`);
+  for (const node of nodes) {
+    const badge = getEvolutionBadge(node.evo);
+    if (node.isAnchor) {
+      output.push(`        ${node.id}["\u{1F464} ${node.name}<br/><i>Anchor (${badge})</i>"]`);
+    } else {
+      output.push(`        ${node.id}["${node.name}<br/><i>${badge} [${node.vis.toFixed(2)}, ${node.evo.toFixed(2)}]</i>"]`);
+    }
+  }
+  for (const link of links) {
+    if (link.label) {
+      output.push(`        ${link.from} -->|"${link.label}"| ${link.to}`);
+    } else {
+      output.push(`        ${link.from} --> ${link.to}`);
+    }
+  }
+  output.push("    end");
+  return output.join("\n");
+}
+function transpileRailroad(source) {
+  const lines = cleanLines(source).filter((l) => !/^\s*railroad(?:-beta)?\b/i.test(l.trim()) && l.trim().length > 0);
+  const output = ["flowchart LR"];
+  function parseRailroadExpr(str) {
+    let pos = 0;
+    function skipWs() {
+      while (pos < str.length && /[\s,]/.test(str[pos])) pos++;
+    }
+    function parseItem() {
+      skipWs();
+      if (pos >= str.length) return null;
+      const match = str.slice(pos).match(/^([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        const fn = match[1];
+        pos += match[0].length;
+        const children = [];
+        while (pos < str.length && str[pos] !== ")") {
+          skipWs();
+          if (str[pos] === ")") break;
+          const child = parseItem();
+          if (child) children.push(child);
+          skipWs();
+        }
+        if (str[pos] === ")") pos++;
+        return { type: fn, children };
+      }
+      const strMatch = str.slice(pos).match(/^"([^"]*)"|^'([^']*)'/);
+      if (strMatch) {
+        const val = strMatch[1] ?? strMatch[2] ?? "";
+        pos += strMatch[0].length;
+        return { type: "literal", value: val };
+      }
+      const idMatch = str.slice(pos).match(/^([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        pos += idMatch[0].length;
+        return { type: "identifier", value: idMatch[1] };
+      }
+      pos++;
+      return null;
+    }
+    return parseItem();
+  }
+  let nodeCounter = 0;
+  function buildGraph(ast, linesArr) {
+    if (!ast) return null;
+    const fn = ast.type.toLowerCase();
+    if (fn === "terminal" || fn === "term" || fn === "literal") {
+      const val = ast.children?.[0]?.value || ast.value || "terminal";
+      const id = "t_" + ++nodeCounter;
+      linesArr.push(`    ${id}(["${val}"])`);
+      return { inlet: id, outlet: id };
+    }
+    if (fn === "nonterminal" || fn === "nonterm" || fn === "identifier") {
+      const val = ast.children?.[0]?.value || ast.value || "nonterminal";
+      const id = "nt_" + ++nodeCounter;
+      linesArr.push(`    ${id}["${val}"]`);
+      return { inlet: id, outlet: id };
+    }
+    if (fn === "comment") {
+      const val = ast.children?.[0]?.value || ast.value || "comment";
+      const id = "c_" + ++nodeCounter;
+      linesArr.push(`    ${id}>"${val}"]`);
+      return { inlet: id, outlet: id };
+    }
+    if (fn === "sequence" || fn === "seq") {
+      const kids = (ast.children || []).map((c) => buildGraph(c, linesArr)).filter((k) => k !== null);
+      if (kids.length === 0) return null;
+      for (let i = 0; i < kids.length - 1; i++) {
+        linesArr.push(`    ${kids[i].outlet} --> ${kids[i + 1].inlet}`);
+      }
+      return { inlet: kids[0].inlet, outlet: kids[kids.length - 1].outlet };
+    }
+    if (fn === "choice") {
+      const kids = (ast.children || []).map((c) => buildGraph(c, linesArr)).filter((k) => k !== null);
+      if (kids.length === 0) return null;
+      const fork = "fork_" + ++nodeCounter;
+      const join = "join_" + ++nodeCounter;
+      linesArr.push(`    ${fork}(( ))`);
+      linesArr.push(`    ${join}(( ))`);
+      for (const kid of kids) {
+        linesArr.push(`    ${fork} --> ${kid.inlet}`);
+        linesArr.push(`    ${kid.outlet} --> ${join}`);
+      }
+      return { inlet: fork, outlet: join };
+    }
+    if (fn === "optional" || fn === "opt") {
+      const kid = buildGraph(ast.children?.[0] || null, linesArr);
+      if (!kid) return null;
+      const fork = "fork_" + ++nodeCounter;
+      const join = "join_" + ++nodeCounter;
+      linesArr.push(`    ${fork}(( ))`);
+      linesArr.push(`    ${join}(( ))`);
+      linesArr.push(`    ${fork} --> ${kid.inlet}`);
+      linesArr.push(`    ${kid.outlet} --> ${join}`);
+      linesArr.push(`    ${fork} --> ${join}`);
+      return { inlet: fork, outlet: join };
+    }
+    if (fn === "oneormore" || fn === "zeroormore" || fn === "repeat") {
+      const kid = buildGraph(ast.children?.[0] || null, linesArr);
+      if (!kid) return null;
+      linesArr.push(`    ${kid.outlet} --> ${kid.inlet}`);
+      return { inlet: kid.inlet, outlet: kid.outlet };
+    }
+    return null;
+  }
+  output.push("    rr_start(( ))");
+  for (const rawLine of lines) {
+    const expr = rawLine.replace(/^[^=]+=\s*/, "").replace(/;\s*$/, "").trim();
+    if (!expr) continue;
+    const ast = parseRailroadExpr(expr);
+    const res = buildGraph(ast, output);
+    if (res) {
+      output.push(`    rr_start --> ${res.inlet}`);
+      output.push(`    ${res.outlet} --> rr_end(( ))`);
+    }
+  }
+  return output.join("\n");
+}
 function adaptDiagramSource(source) {
   const trimmed = source.trimStart();
   if (/^zenuml\b/i.test(trimmed)) {
@@ -2520,6 +2836,27 @@ function adaptDiagramSource(source) {
       code: transpileTreeView(source),
       transpiled: true,
       type: "treeview"
+    };
+  }
+  if (/^(?:cynefin-beta|cynefin)\b/i.test(trimmed)) {
+    return {
+      code: transpileCynefin(source),
+      transpiled: true,
+      type: "cynefin"
+    };
+  }
+  if (/^(?:wardley-beta|wardley)\b/i.test(trimmed)) {
+    return {
+      code: transpileWardley(source),
+      transpiled: true,
+      type: "wardley"
+    };
+  }
+  if (/^(?:railroad-beta|railroad)\b/i.test(trimmed)) {
+    return {
+      code: transpileRailroad(source),
+      transpiled: true,
+      type: "railroad"
     };
   }
   return {
@@ -2802,7 +3139,7 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
           reqBorderColor: palette.border
         },
         c4: {
-          c4ShapeMargin: 90,
+          c4ShapeMargin: 180,
           c4BoundaryMargin: 35,
           diagramMarginX: 50,
           diagramMarginY: 35,

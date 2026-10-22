@@ -628,19 +628,65 @@ export function fixSankeyCollisions(doc: Document, palette?: PaletteData, dark?:
  */
 export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData): void {
   const relLabels = Array.from(
-    doc.querySelectorAll('.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"]')
+    doc.querySelectorAll(
+      '.relationshipLabel, .relation-label, .relationship-label, g.relationship text, text[class*="relationship"], text:has(tspan[alignment-baseline]), g:has(> line, > path) > text'
+    )
   );
 
   const labelItems: Array<{ el: Element; x: number; y: number; width: number; height: number }> = [];
 
   for (const el of relLabels) {
-    const x = parseFloat(el.getAttribute('x') || '0');
-    const y = parseFloat(el.getAttribute('y') || '0');
+    if (el.getAttribute('data-c4-fixed') === 'true') continue;
+    if (el.closest('.node, .c4-shape, .label-container')) continue;
+
+    const rawX = el.getAttribute('x');
+    const rawY = el.getAttribute('y');
+    const x = parseFloat(rawX || '0');
+    const y = parseFloat(rawY || '0');
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) continue;
-    const text = (el.textContent || '').trim();
-    if (!text) continue;
-    const width = Math.max(text.length * 7.5, 60);
-    labelItems.push({ el, x, y, width, height: 24 });
+
+    const fullText = (el.textContent || '').trim();
+    if (!fullText) continue;
+
+    el.setAttribute('data-c4-fixed', 'true');
+    el.setAttribute('fill', palette.text);
+    if ((el as HTMLElement).style) {
+      (el as HTMLElement).style.fill = palette.text;
+      (el as HTMLElement).style.color = palette.text;
+    }
+
+    let width = 0;
+    let height = 24;
+    // Wrap long relationship text (> 22 chars) into 2 lines so it doesn't collide horizontally with cards
+    if (fullText.length > 22 && fullText.includes(' ')) {
+      const words = fullText.split(/\s+/);
+      const mid = Math.ceil(words.length / 2);
+      const line1 = words.slice(0, mid).join(' ');
+      const line2 = words.slice(mid).join(' ');
+      width = Math.max(line1.length, line2.length) * 7.5 + 24;
+      height = 36;
+
+      el.textContent = '';
+      const tspan1 = doc.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspan1.setAttribute('x', String(x));
+      tspan1.setAttribute('dy', '-0.55em');
+      tspan1.setAttribute('text-anchor', 'middle');
+      tspan1.textContent = line1;
+
+      const tspan2 = doc.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspan2.setAttribute('x', String(x));
+      tspan2.setAttribute('dy', '1.2em');
+      tspan2.setAttribute('text-anchor', 'middle');
+      tspan2.textContent = line2;
+
+      el.appendChild(tspan1);
+      el.appendChild(tspan2);
+    } else {
+      width = Math.max(fullText.length * 7.5, 60);
+      height = 24;
+    }
+
+    labelItems.push({ el, x, y, width, height });
   }
 
   for (let i = 0; i < labelItems.length; i++) {
@@ -650,7 +696,7 @@ export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData)
       const hDist = Math.abs(a.x - b.x);
       const vDist = Math.abs(a.y - b.y);
 
-      const minHDist = (a.width + b.width) / 2 + 10;
+      const minHDist = Math.max((a.width + b.width) / 2 + 20, 180);
       if (vDist < 25 && hDist < minHDist) {
         if (a.y <= b.y) {
           a.y -= 22;
@@ -661,6 +707,12 @@ export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData)
         }
         a.el.setAttribute('y', String(a.y));
         b.el.setAttribute('y', String(b.y));
+        for (const tspan of a.el.querySelectorAll('tspan')) {
+          tspan.setAttribute('x', String(a.x));
+        }
+        for (const tspan of b.el.querySelectorAll('tspan')) {
+          tspan.setAttribute('x', String(b.x));
+        }
       }
     }
   }
@@ -675,15 +727,15 @@ export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData)
     const rect = doc.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.classList.add('c4-rel-pill');
     rect.setAttribute('x', String(item.x - item.width / 2 - padX));
-    rect.setAttribute('y', String(item.y - 12 - padY));
+    rect.setAttribute('y', String(item.y - item.height / 2 - padY));
     rect.setAttribute('width', String(item.width + padX * 2));
-    rect.setAttribute('height', String(24 + padY));
-    rect.setAttribute('rx', '4');
-    rect.setAttribute('ry', '4');
+    rect.setAttribute('height', String(item.height + padY * 2));
+    rect.setAttribute('rx', '6');
+    rect.setAttribute('ry', '6');
     rect.setAttribute('fill', palette.label);
     rect.setAttribute('stroke', palette.border);
     rect.setAttribute('stroke-width', '1px');
-    rect.setAttribute('opacity', '0.94');
+    rect.setAttribute('opacity', '0.96');
 
     parent.insertBefore(rect, item.el);
   }
@@ -978,7 +1030,7 @@ export function styleSvg(
 
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', palette.line);
-      path.setAttribute('stroke-width', '1.5px');
+      path.setAttribute('stroke-width', '1.53px');
 
       const edge = resolveEdge(doc, path);
       let routed: string | null = null;
@@ -1061,7 +1113,7 @@ export function styleSvg(
       }
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', palette.line);
-      path.setAttribute('stroke-width', '1.5px');
+      path.setAttribute('stroke-width', '1.53px');
     }
   }
 
@@ -1150,8 +1202,8 @@ export function styleSvg(
       }
     } else {
       marker.setAttribute('markerUnits', 'userSpaceOnUse');
-      marker.setAttribute('markerWidth', '8');
-      marker.setAttribute('markerHeight', '8');
+      marker.setAttribute('markerWidth', '8.2');
+      marker.setAttribute('markerHeight', '8.2');
       marker.setAttribute('viewBox', '0 0 10 10');
       marker.setAttribute('refY', '5');
       marker.setAttribute('orient', 'auto');
@@ -1170,8 +1222,8 @@ export function styleSvg(
     const isStart = marker.id.toLowerCase().includes('barbstart');
     const isMargin = marker.id.toLowerCase().includes('margin');
     marker.setAttribute('markerUnits', 'userSpaceOnUse');
-    marker.setAttribute('markerWidth', '14');
-    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('markerWidth', '14.2');
+    marker.setAttribute('markerHeight', '10.2');
     marker.setAttribute('viewBox', '0 0 20 14');
     marker.setAttribute('refX', isStart ? '0' : (isMargin ? '17' : '19'));
     marker.setAttribute('refY', '7');
@@ -1190,7 +1242,7 @@ export function styleSvg(
   for (const path of doc.querySelectorAll('path.transition, .edgePaths path.transition, .stateGroup .transition')) {
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', palette.line);
-    path.setAttribute('stroke-width', '1.5px');
+    path.setAttribute('stroke-width', '1.53px');
   }
 
   for (const node of doc.querySelectorAll('g.node')) {

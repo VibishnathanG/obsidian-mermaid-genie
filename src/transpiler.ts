@@ -464,6 +464,331 @@ export function transpileTreeView(source: string): string {
 }
 
 /**
+ * Transpiles Cynefin Framework (cynefin-beta) into a clean 2x2 quadrant flowchart.
+ */
+export function transpileCynefin(source: string): string {
+  const lines = cleanLines(source);
+  let title = 'Cynefin Framework';
+  const domains: { [key: string]: string[] } = {
+    complex: [],
+    complicated: [],
+    chaotic: [],
+    clear: [],
+    disorder: [],
+  };
+  let currentDomain: string | null = null;
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\s*cynefin(?:-beta)?\b/i.test(trimmed)) continue;
+
+    const titleMatch = trimmed.match(/^title\s+(.*)$/i);
+    if (titleMatch) {
+      title = titleMatch[1]?.trim() || title;
+      continue;
+    }
+
+    const domainMatch = trimmed.match(/^(complex|complicated|chaotic|clear|simple|disorder|aporia)\b/i);
+    if (domainMatch) {
+      let d = domainMatch[1]!.toLowerCase();
+      if (d === 'simple') d = 'clear';
+      if (d === 'aporia') d = 'disorder';
+      currentDomain = d;
+      continue;
+    }
+
+    if (currentDomain && domains[currentDomain]) {
+      const cleanItem = trimmed.replace(/^["']|["']$/g, '').trim();
+      if (cleanItem) {
+        domains[currentDomain]!.push(cleanItem);
+      }
+    }
+  }
+
+  const output: string[] = ['flowchart TD'];
+  output.push(`    subgraph Cynefin ["Cynefin Framework: ${title}"]`);
+  output.push('        direction TB');
+  output.push('        subgraph TopRow [" "]');
+  output.push('            direction LR');
+  output.push('            subgraph Complex ["🌀 Complex<br/><i>Probe · Sense · Respond</i>"]');
+  if (domains.complex!.length === 0) {
+    output.push('                c_empty["(No active items)"]');
+  } else {
+    domains.complex!.forEach((item, idx) => {
+      output.push(`                c_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push('            end');
+  output.push('            subgraph Complicated ["🔍 Complicated<br/><i>Sense · Analyze · Respond</i>"]');
+  if (domains.complicated!.length === 0) {
+    output.push('                comp_empty["(No active items)"]');
+  } else {
+    domains.complicated!.forEach((item, idx) => {
+      output.push(`                comp_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push('            end');
+  output.push('        end');
+
+  output.push('        subgraph BottomRow [" "]');
+  output.push('            direction LR');
+  output.push('            subgraph Chaotic ["⚡ Chaotic<br/><i>Act · Sense · Respond</i>"]');
+  if (domains.chaotic!.length === 0) {
+    output.push('                ch_empty["(No active items)"]');
+  } else {
+    domains.chaotic!.forEach((item, idx) => {
+      output.push(`                ch_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push('            end');
+  output.push('            subgraph Clear ["✅ Clear<br/><i>Sense · Categorize · Respond</i>"]');
+  if (domains.clear!.length === 0) {
+    output.push('                cl_empty["(No active items)"]');
+  } else {
+    domains.clear!.forEach((item, idx) => {
+      output.push(`                cl_${idx + 1}["${item}"]`);
+    });
+  }
+  output.push('            end');
+  output.push('        end');
+
+  output.push('        TopRow ~~~ BottomRow');
+
+  if (domains.disorder!.length > 0) {
+    output.push('        subgraph Disorder ["❓ Disorder / Aporia"]');
+    domains.disorder!.forEach((item, idx) => {
+      output.push(`            dis_${idx + 1}["${item}"]`);
+    });
+    output.push('        end');
+    output.push('        BottomRow ~~~ Disorder');
+  }
+
+  output.push('    end');
+  return output.join('\n');
+}
+
+/**
+ * Transpiles Wardley Map (wardley-beta) into a value-chain flowchart TD with evolution badges.
+ */
+export function transpileWardley(source: string): string {
+  const lines = cleanLines(source);
+  let title = 'Knowledge Map';
+  const nodes: Array<{ id: string; name: string; isAnchor: boolean; vis: number; evo: number }> = [];
+  const links: Array<{ from: string; to: string; label?: string }> = [];
+
+  function getEvolutionBadge(evo: number): string {
+    if (evo < 0.25) return '🌱 Genesis';
+    if (evo < 0.50) return '🛠️ Custom-Built';
+    if (evo < 0.75) return '📦 Product';
+    return '⚡ Commodity';
+  }
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^\s*wardley(?:-beta)?\b/i.test(trimmed)) continue;
+
+    const titleMatch = trimmed.match(/^title\s+(.*)$/i);
+    if (titleMatch) {
+      title = titleMatch[1]?.trim() || title;
+      continue;
+    }
+
+    // anchor Name [vis, evo] or anchor Name
+    const anchorMatch = trimmed.match(/^anchor\s+([A-Za-z0-9_]+)(?:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\])?/i);
+    if (anchorMatch) {
+      const id = anchorMatch[1]!;
+      const vis = anchorMatch[2] ? parseFloat(anchorMatch[2]) : 0.95;
+      const evo = anchorMatch[3] ? parseFloat(anchorMatch[3]) : 0.60;
+      nodes.push({ id, name: id, isAnchor: true, vis, evo });
+      continue;
+    }
+
+    // component Name [vis, evo] or component Name
+    const compMatch = trimmed.match(/^component\s+([A-Za-z0-9_]+)(?:\s*\[\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\])?/i);
+    if (compMatch) {
+      const id = compMatch[1]!;
+      const vis = compMatch[2] ? parseFloat(compMatch[2]) : 0.50;
+      const evo = compMatch[3] ? parseFloat(compMatch[3]) : 0.50;
+      nodes.push({ id, name: id, isAnchor: false, vis, evo });
+      continue;
+    }
+
+    // Links: A -> B or A -> B "label" or A --> B
+    const linkMatch = trimmed.match(/^([A-Za-z0-9_]+)\s*--?>\s*([A-Za-z0-9_]+)(?:\s*\[?["']?(.*?)["']?\]?)?$/);
+    if (linkMatch) {
+      const from = linkMatch[1]!;
+      const to = linkMatch[2]!;
+      const label = linkMatch[3]?.trim();
+      links.push({ from, to, label: label || undefined });
+      continue;
+    }
+  }
+
+  const output: string[] = ['flowchart TD'];
+  output.push(`    subgraph Wardley ["Wardley Map: ${title}"]`);
+
+  for (const node of nodes) {
+    const badge = getEvolutionBadge(node.evo);
+    if (node.isAnchor) {
+      output.push(`        ${node.id}["👤 ${node.name}<br/><i>Anchor (${badge})</i>"]`);
+    } else {
+      output.push(`        ${node.id}["${node.name}<br/><i>${badge} [${node.vis.toFixed(2)}, ${node.evo.toFixed(2)}]</i>"]`);
+    }
+  }
+
+  for (const link of links) {
+    if (link.label) {
+      output.push(`        ${link.from} -->|"${link.label}"| ${link.to}`);
+    } else {
+      output.push(`        ${link.from} --> ${link.to}`);
+    }
+  }
+
+  output.push('    end');
+  return output.join('\n');
+}
+
+/**
+ * Transpiles Railroad Diagrams (railroad-beta) into flowchart LR sequences and branches.
+ */
+export function transpileRailroad(source: string): string {
+  const lines = cleanLines(source).filter(l => !/^\s*railroad(?:-beta)?\b/i.test(l.trim()) && l.trim().length > 0);
+  const output: string[] = ['flowchart LR'];
+
+  interface RRAST {
+    type: string;
+    value?: string;
+    children?: RRAST[];
+  }
+
+  function parseRailroadExpr(str: string): RRAST | null {
+    let pos = 0;
+    function skipWs(): void {
+      while (pos < str.length && /[\s,]/.test(str[pos]!)) pos++;
+    }
+    function parseItem(): RRAST | null {
+      skipWs();
+      if (pos >= str.length) return null;
+      const match = str.slice(pos).match(/^([a-zA-Z0-9_]+)\s*\(/);
+      if (match) {
+        const fn = match[1]!;
+        pos += match[0].length;
+        const children: RRAST[] = [];
+        while (pos < str.length && str[pos] !== ')') {
+          skipWs();
+          if (str[pos] === ')') break;
+          const child = parseItem();
+          if (child) children.push(child);
+          skipWs();
+        }
+        if (str[pos] === ')') pos++;
+        return { type: fn, children };
+      }
+      const strMatch = str.slice(pos).match(/^"([^"]*)"|^'([^']*)'/);
+      if (strMatch) {
+        const val = strMatch[1] ?? strMatch[2] ?? '';
+        pos += strMatch[0].length;
+        return { type: 'literal', value: val };
+      }
+      const idMatch = str.slice(pos).match(/^([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        pos += idMatch[0].length;
+        return { type: 'identifier', value: idMatch[1] };
+      }
+      pos++;
+      return null;
+    }
+    return parseItem();
+  }
+
+  let nodeCounter = 0;
+  function buildGraph(ast: RRAST | null, linesArr: string[]): { inlet: string; outlet: string } | null {
+    if (!ast) return null;
+    const fn = ast.type.toLowerCase();
+
+    if (fn === 'terminal' || fn === 'term' || fn === 'literal') {
+      const val = ast.children?.[0]?.value || ast.value || 'terminal';
+      const id = 't_' + (++nodeCounter);
+      linesArr.push(`    ${id}(["${val}"])`);
+      return { inlet: id, outlet: id };
+    }
+
+    if (fn === 'nonterminal' || fn === 'nonterm' || fn === 'identifier') {
+      const val = ast.children?.[0]?.value || ast.value || 'nonterminal';
+      const id = 'nt_' + (++nodeCounter);
+      linesArr.push(`    ${id}["${val}"]`);
+      return { inlet: id, outlet: id };
+    }
+
+    if (fn === 'comment') {
+      const val = ast.children?.[0]?.value || ast.value || 'comment';
+      const id = 'c_' + (++nodeCounter);
+      linesArr.push(`    ${id}>"${val}"]`);
+      return { inlet: id, outlet: id };
+    }
+
+    if (fn === 'sequence' || fn === 'seq') {
+      const kids = (ast.children || []).map(c => buildGraph(c, linesArr)).filter((k): k is { inlet: string; outlet: string } => k !== null);
+      if (kids.length === 0) return null;
+      for (let i = 0; i < kids.length - 1; i++) {
+        linesArr.push(`    ${kids[i]!.outlet} --> ${kids[i + 1]!.inlet}`);
+      }
+      return { inlet: kids[0]!.inlet, outlet: kids[kids.length - 1]!.outlet };
+    }
+
+    if (fn === 'choice') {
+      const kids = (ast.children || []).map(c => buildGraph(c, linesArr)).filter((k): k is { inlet: string; outlet: string } => k !== null);
+      if (kids.length === 0) return null;
+      const fork = 'fork_' + (++nodeCounter);
+      const join = 'join_' + (++nodeCounter);
+      linesArr.push(`    ${fork}(( ))`);
+      linesArr.push(`    ${join}(( ))`);
+      for (const kid of kids) {
+        linesArr.push(`    ${fork} --> ${kid.inlet}`);
+        linesArr.push(`    ${kid.outlet} --> ${join}`);
+      }
+      return { inlet: fork, outlet: join };
+    }
+
+    if (fn === 'optional' || fn === 'opt') {
+      const kid = buildGraph(ast.children?.[0] || null, linesArr);
+      if (!kid) return null;
+      const fork = 'fork_' + (++nodeCounter);
+      const join = 'join_' + (++nodeCounter);
+      linesArr.push(`    ${fork}(( ))`);
+      linesArr.push(`    ${join}(( ))`);
+      linesArr.push(`    ${fork} --> ${kid.inlet}`);
+      linesArr.push(`    ${kid.outlet} --> ${join}`);
+      linesArr.push(`    ${fork} --> ${join}`);
+      return { inlet: fork, outlet: join };
+    }
+
+    if (fn === 'oneormore' || fn === 'zeroormore' || fn === 'repeat') {
+      const kid = buildGraph(ast.children?.[0] || null, linesArr);
+      if (!kid) return null;
+      linesArr.push(`    ${kid.outlet} --> ${kid.inlet}`);
+      return { inlet: kid.inlet, outlet: kid.outlet };
+    }
+
+    return null;
+  }
+
+  output.push('    rr_start(( ))');
+  for (const rawLine of lines) {
+    const expr = rawLine.replace(/^[^=]+=\s*/, '').replace(/;\s*$/, '').trim();
+    if (!expr) continue;
+    const ast = parseRailroadExpr(expr);
+    const res = buildGraph(ast, output);
+    if (res) {
+      output.push(`    rr_start --> ${res.inlet}`);
+      output.push(`    ${res.outlet} --> rr_end(( ))`);
+    }
+  }
+
+  return output.join('\n');
+}
+
+/**
  * Universal pre-transpiler: inspects diagram source and transpiles unsupported syntaxes.
  */
 export function adaptDiagramSource(source: string): TranspileResult {
@@ -498,6 +823,30 @@ export function adaptDiagramSource(source: string): TranspileResult {
       code: transpileTreeView(source),
       transpiled: true,
       type: 'treeview',
+    };
+  }
+
+  if (/^(?:cynefin-beta|cynefin)\b/i.test(trimmed)) {
+    return {
+      code: transpileCynefin(source),
+      transpiled: true,
+      type: 'cynefin',
+    };
+  }
+
+  if (/^(?:wardley-beta|wardley)\b/i.test(trimmed)) {
+    return {
+      code: transpileWardley(source),
+      transpiled: true,
+      type: 'wardley',
+    };
+  }
+
+  if (/^(?:railroad-beta|railroad)\b/i.test(trimmed)) {
+    return {
+      code: transpileRailroad(source),
+      transpiled: true,
+      type: 'railroad',
     };
   }
 

@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adaptDiagramSource, transpileZenUML, transpileUseCase, transpileAgentFlow, transpileTreeView } from '../src/transpiler';
+import {
+  adaptDiagramSource,
+  transpileZenUML,
+  transpileUseCase,
+  transpileAgentFlow,
+  transpileTreeView,
+  transpileCynefin,
+  transpileWardley,
+  transpileRailroad,
+} from '../src/transpiler';
 
 test('ZenUML: transpiles nested method activations and reply messages', () => {
   const zenumlCode = `zenuml
@@ -129,7 +138,84 @@ test('adaptDiagramSource: detects and transforms unsupported diagram keywords', 
   assert.equal(uRes.transpiled, true);
   assert.equal(uRes.type, 'usecase');
 
+  const cyRes = adaptDiagramSource('cynefin-beta\ncomplex\n"Dynamic branching"');
+  assert.equal(cyRes.transpiled, true);
+  assert.equal(cyRes.type, 'cynefin');
+
+  const wRes = adaptDiagramSource('wardley-beta\nanchor User [0.95, 0.65]');
+  assert.equal(wRes.transpiled, true);
+  assert.equal(wRes.type, 'wardley');
+
+  const rRes = adaptDiagramSource('railroad-beta\ndiagram = sequence(terminal("flowchart"));');
+  assert.equal(rRes.transpiled, true);
+  assert.equal(rRes.type, 'railroad');
+
   const nativeRes = adaptDiagramSource('flowchart TD\nA --> B');
   assert.equal(nativeRes.transpiled, false);
   assert.equal(nativeRes.type, 'native');
+});
+
+test('Cynefin: transpiles problem domains into 2x2 quadrant flowchart', () => {
+  const cynefinCode = `cynefin-beta
+    title Engineering Problem Domains
+    complex
+      "Dynamic adaptive graph layout with arbitrary branching"
+    complicated
+      "WCAG 2.1 relative luminance color contrast calculation"
+    clear
+      "Mapping theme hex tokens to CSS variables"
+    chaotic
+      "Uncaught recursive parsing crashes in production"
+  `;
+
+  const transpiled = transpileCynefin(cynefinCode);
+  assert.ok(transpiled.includes('flowchart TD'));
+  assert.ok(transpiled.includes('subgraph Cynefin ["Cynefin Framework: Engineering Problem Domains"]'));
+  assert.ok(transpiled.includes('subgraph Complex ["🌀 Complex<br/><i>Probe · Sense · Respond</i>"]'));
+  assert.ok(transpiled.includes('subgraph Complicated ["🔍 Complicated<br/><i>Sense · Analyze · Respond</i>"]'));
+  assert.ok(transpiled.includes('subgraph Chaotic ["⚡ Chaotic<br/><i>Act · Sense · Respond</i>"]'));
+  assert.ok(transpiled.includes('subgraph Clear ["✅ Clear<br/><i>Sense · Categorize · Respond</i>"]'));
+  assert.ok(transpiled.includes('Dynamic adaptive graph layout with arbitrary branching'));
+  assert.ok(transpiled.includes('WCAG 2.1 relative luminance color contrast calculation'));
+  assert.ok(transpiled.includes('TopRow ~~~ BottomRow'));
+});
+
+test('Wardley: transpiles components, anchors, and evolution stages', () => {
+  const wardleyCode = `wardley-beta
+    title Knowledge Graph System
+    anchor User [0.95, 0.65]
+    component EditorUI [0.82, 0.60]
+    component GraphRenderer [0.65, 0.50]
+    component MarkdownParser [0.45, 0.70]
+    component FileSystem [0.20, 0.85]
+
+    User -> EditorUI
+    EditorUI -> GraphRenderer
+    EditorUI -> MarkdownParser
+    MarkdownParser -> FileSystem
+  `;
+
+  const transpiled = transpileWardley(wardleyCode);
+  assert.ok(transpiled.includes('flowchart TD'));
+  assert.ok(transpiled.includes('subgraph Wardley ["Wardley Map: Knowledge Graph System"]'));
+  assert.ok(transpiled.includes('User["👤 User<br/><i>Anchor (📦 Product)</i>"]'));
+  assert.ok(transpiled.includes('EditorUI["EditorUI<br/><i>📦 Product [0.82, 0.60]</i>"]'));
+  assert.ok(transpiled.includes('FileSystem["FileSystem<br/><i>⚡ Commodity [0.20, 0.85]</i>"]'));
+  assert.ok(transpiled.includes('User --> EditorUI'));
+  assert.ok(transpiled.includes('MarkdownParser --> FileSystem'));
+});
+
+test('Railroad: transpiles sequence, choice, and terminal/nonterminal expressions', () => {
+  const railroadCode = `railroad-beta
+    diagram = sequence(terminal("flowchart"), choice(nonterminal("direction"), terminal("TD")), nonterminal("nodes"));
+  `;
+
+  const transpiled = transpileRailroad(railroadCode);
+  assert.ok(transpiled.includes('flowchart LR'));
+  assert.ok(transpiled.includes('rr_start(( ))'));
+  assert.ok(transpiled.includes('(["flowchart"])'));
+  assert.ok(transpiled.includes('["direction"]'));
+  assert.ok(transpiled.includes('(["TD"])'));
+  assert.ok(transpiled.includes('["nodes"]'));
+  assert.ok(transpiled.includes('rr_end(( ))'));
 });

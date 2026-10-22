@@ -343,7 +343,7 @@ export default class MermaidGeniePlugin extends Plugin {
           reqBorderColor: palette.border,
         },
         c4: {
-          c4ShapeMargin: 90,
+          c4ShapeMargin: 180,
           c4BoundaryMargin: 35,
           diagramMarginX: 50,
           diagramMarginY: 35,
