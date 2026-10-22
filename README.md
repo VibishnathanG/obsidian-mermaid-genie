@@ -96,6 +96,29 @@ flowchart TD
 
 ---
 
+## Direct Configuration via data.json
+
+All settings can be configured directly by editing `data.json` inside your plugin folder without opening the Obsidian UI.
+
+For a full breakdown of all keys, allowed values, palettes, and ready-to-copy configurations, see the [**data.json Configuration Guide**](DATA_OPTIONS.md).
+
+```json
+{
+  "colorStyle": "multi",
+  "multiPalette": "clear",
+  "singlePalette": "slate",
+  "compactLayout": true,
+  "pathHighlight": true,
+  "animationDuration": 450,
+  "hoverDelay": 180,
+  "nodeRadius": 6,
+  "exportControls": true,
+  "exportFolder": ""
+}
+```
+
+---
+
 ## Development
 
 ```bash
