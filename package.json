@@ -18,7 +18,11 @@
     "colors",
     "styling"
   ],
-  "author": "Mermaid Genie Contributors",
+  "author": "Vibish <https://github.com/VibishnathanG>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VibishnathanG/obsidian-mermaid-genie.git"
+  },
   "license": "MIT",
   "devDependencies": {
     "@types/jsdom": "^30.0.0",

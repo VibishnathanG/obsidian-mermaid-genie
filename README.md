@@ -1,32 +1,44 @@
-# Mermaid Genie
+# Obsidian Mermaid Genie
 
-**Mermaid Genie** is an Obsidian plugin combining compact layout intelligence, aligned decision branching, smooth interactive ancestor path highlighting, coordinated multi-colored flow blocks, crisp non-distorted typography, and comprehensive PNG/SVG export capabilities.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-47%20passed-brightgreen.svg)]()
+[![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-purple.svg)](https://obsidian.md)
 
-## Overview
+**Mermaid Genie** is a high-performance Obsidian plugin engineered for beautiful, publication-quality Mermaid diagrams. It combines compact layout intelligence, aligned decision branches, interactive upstream path illumination, harmonious multi-colored flow blocks, and 100% distortion-free typography across all 33 Mermaid diagram types.
 
-Mermaid Genie merges the best architectural features from [obsidian-mermaid-flow-enhancer](https://github.com/itsNikolay/obsidian-mermaid-flow-enhancer) and [mermaid-beauty](https://github.com/theChildinus/mermaid-beauty), addressing the core rendering flaws (such as text distortion and dark-mode color inversion) while establishing a lightweight (~70 KB) native runtime footprint.
+Developed and maintained by **Vibish** ([@VibishnathanG](https://github.com/VibishnathanG)).
 
-### Core-Capabilities
+---
 
-- **Nice Colored Flow Blocks**: Intelligently identifies branches, subgraphs, and clusters to assign distinct, harmonious colors using balanced palettes (`Clear`, `Cool`, `Natural`, or single-hue presets like `Slate`, `Mint`, `Sky`, `Rose`).
-- **Crisp, Clear Typography**: Solves the blurry / distorted text issue present in other renderers:
+## Core-Capabilities
+
+- **Harmonious Multi-Colored Flow Blocks**: Intelligently identifies branches, subgraphs, parallel paths, and decision trees to assign distinct, coordinated color palettes (`Clear`, `Cool`, `Natural`, or single-hue presets `Slate`, `Mint`, `Sky`, `Rose`).
+- **Comprehensive Syntax Support**:
+  - **ZenUML Sequences**: Transpiles nested sync execution lifelines, stereotyping annotators (`@Actor`, `@Boundary`, `@Database`), async events, loops, and reply messages without external web dependencies.
+  - **Use Case Diagrams**: Native actor boundaries, stereotypes (`<<include>>`, `<<extend>>`), and interaction links.
+  - **Block Diagrams (`block-beta`)**: Balanced multi-column grid layouts, 14px crisp arrowheads, and high-contrast typography.
+  - **Sankey Diagrams (`sankey-beta`)**: Luminous multi-gradient ribbons (`mix-blend-mode: normal`) and collision-free node labels with 2.5px text halos.
+  - **C4 Architecture Diagrams**: Deconflicted relationship labels with protective badge pills and normalized dark-mode contrast.
+  - **SysML Requirement Diagrams**: Thematic container fills, clean risk/verification badges, and styled relationship arrows.
+  - **Gantt Charts**: High-contrast active task text (`#0f172a` against light accent bars in dark mode) and crisp axis date tick marks.
+- **Crisp, Non-Distorted Typography**:
   - Inherits Obsidian's native font stack (`var(--font-text)`).
-  - Enforces `filter: none !important;` to neutralize Obsidian's dark-mode invert filter that causes color degradation and subpixel fringing.
-  - Dynamically calculates WCAG contrast ratios (`textOnFill`) to guarantee readability (>4.5:1).
-  - Uses native HTML labels (`htmlLabels: true`) with clean line-heights and word wrapping.
-- **Compact Flowchart Layout**:
+  - Eliminates Obsidian's dark-mode invert filters that cause color degradation and subpixel blurring.
+  - Enforces WCAG AA contrast ratios (>4.5:1) on every node and label.
+- **Compact Flowchart Layout & Smart Routing**:
   - Aligns parallel branches leaving decision diamonds.
   - Routes clean orthogonal connectors with rounded corners.
-  - Handles return loops through dedicated outer lanes without line collisions.
-  - Automatically wraps decision diamond labels to avoid excessively wide diamonds.
+  - Dedicated outer return lanes without connector overlap.
+  - Decision diamond label wrapping prevents oversized nodes.
 - **Interactive Ancestor Path Highlighting**:
   - Hover or focus any node or edge to illuminate its complete upstream workflow.
-  - Non-path elements gently dim with smooth hardware-accelerated transitions.
+  - Non-path elements gently dim with hardware-accelerated transitions.
+- **Instant In-Memory Render Cache**:
+  - Caches styled SVGs in memory for 0ms re-renders during note navigation.
 - **Copy & Export Controls**:
   - Floating action menu directly on diagram blocks.
   - Copy diagram as vector SVG or high-DPI PNG.
   - Export diagram directly into Obsidian vault attachments or system file dialogs.
-  - Command palette integration.
 
 ---
 
@@ -34,16 +46,20 @@ Mermaid Genie merges the best architectural features from [obsidian-mermaid-flow
 
 ### Manual-Installation
 
-1. Copy the following three artifacts from this repository:
+1. Copy the following three files from the [`dist/`](dist/) folder:
    - `main.js`
    - `manifest.json`
    - `styles.css`
 2. In your Obsidian vault, navigate to:
-   `<vault>/.obsidian/plugins/`
+   ```text
+   <vault>/.obsidian/plugins/
+   ```
 3. Create a folder named `mermaid-genie`:
-   `<vault>/.obsidian/plugins/mermaid-genie/`
+   ```text
+   <vault>/.obsidian/plugins/mermaid-genie/
+   ```
 4. Place the three files inside that folder.
-5. In Obsidian, go to **Settings → Community plugins**, click **Reload**, and enable **Mermaid Genie**.
+5. In Obsidian, open **Settings → Community plugins**, click **Reload plugins**, and enable **Mermaid Genie**.
 
 ---
 
@@ -86,7 +102,7 @@ flowchart TD
 # Install dependencies
 npm install
 
-# Run unit tests
+# Run unit test suite (47 tests)
 npm test
 
 # Run TypeScript type check
@@ -95,3 +111,9 @@ npm run typecheck
 # Build production bundle
 npm run build
 ```
+
+---
+
+## License
+
+MIT License — Copyright (c) 2026 [Vibish](https://github.com/VibishnathanG).
