@@ -1,4 +1,4 @@
-import type { PaletteData } from './colors';
+import { textOnFill, type PaletteData } from './colors';
 import { applyFlowchartColors } from './flowchart-colors';
 import { softenOrthogonalPath } from './rounded-path';
 import type { GenieSettings } from './settings';
@@ -896,7 +896,9 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     }
   }
 
-  // Task bars
+  // Task bars: colorize with coordinated palette fills and borders
+  const isMulti = palette.fills.length > 0;
+  let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute('class') || '';
     if (cls.includes('done')) {
@@ -912,8 +914,12 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     } else if (!cls.includes('milestone')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      const slot = taskBarIdx % (palette.fills.length || 1);
+      const fill = isMulti ? palette.fills[slot]! : palette.surface;
+      const stroke = isMulti ? palette.borders[slot]! : palette.border;
+      taskBarIdx++;
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.5px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
@@ -937,8 +943,8 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     }
   }
 
-  // Non-milestone task bars: enclose text cleanly inside the task bar
-  for (const text of Array.from(doc.querySelectorAll('.taskTextOutsideRight, .taskTextOutsideLeft, .taskTextOutside'))) {
+  // Non-milestone task bars: enclose text cleanly inside the task bar with guaranteed contrast
+  for (const text of Array.from(doc.querySelectorAll('.taskTextOutsideRight, .taskTextOutsideLeft, .taskTextOutside, .taskText, [class*="taskText"]'))) {
     if (text.classList.contains('milestoneText')) continue;
     const ty = parseFloat(text.getAttribute('y') || '0');
     let matchedRect: SVGRectElement | null = null;
@@ -980,8 +986,9 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
       text.setAttribute('text-anchor', 'middle');
       text.classList.remove('taskTextOutsideRight', 'taskTextOutsideLeft', 'taskTextOutside');
       text.classList.add('taskText');
-      const isDarkActive = dark && (matchedRect.classList.contains('active') || text.classList.contains('active'));
-      const fillCol = isDarkActive ? '#0f172a' : (dark ? '#ffffff' : palette.text);
+
+      const rectFill = matchedRect.getAttribute('fill') || palette.surface;
+      const fillCol = textOnFill(rectFill, palette.text);
       text.setAttribute('fill', fillCol);
       if ((text as HTMLElement).style) {
         (text as HTMLElement).style.setProperty('fill', fillCol, 'important');
@@ -1022,10 +1029,18 @@ export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: bool
   if (!isClass) return;
 
   // Class box containers (rects and path-based outer-paths)
-  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
+  const isMulti = palette.fills.length > 0;
+  const classNodes = Array.from(doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]'));
+  for (let i = 0; i < classNodes.length; i++) {
+    const node = classNodes[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMulti ? palette.fills[slot]! : palette.surface;
+    const stroke = isMulti ? palette.borders[slot]! : palette.border;
+    const textColor = textOnFill(fill, palette.text);
+
     for (const rect of node.querySelectorAll(':scope > rect, rect.basic, g.classGroup > rect')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.5px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
@@ -1118,10 +1133,17 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
   root.classList.add('erDiagram');
 
   // Outer entity container boxes
-  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
+  const isMultiEr = palette.fills.length > 0;
+  const entities = Array.from(doc.querySelectorAll('g.node, [id*="entity-"]'));
+  for (let i = 0; i < entities.length; i++) {
+    const node = entities[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMultiEr ? palette.fills[slot]! : palette.surface;
+    const stroke = isMultiEr ? palette.borders[slot]! : palette.border;
+
     for (const rect of node.querySelectorAll(':scope > rect.entityBox, rect.basic')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.5px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
@@ -1225,11 +1247,17 @@ export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: bool
   if (!isKanban) return;
 
   // Kanban column backgrounds
-  for (const col of doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section')) {
+  const isMultiKanban = palette.fills.length > 0;
+  const cols = Array.from(doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section'));
+  for (let i = 0; i < cols.length; i++) {
+    const col = cols[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const stroke = isMultiKanban ? palette.borders[slot]! : palette.border;
+
     const rect = col.querySelector(':scope > rect, rect') as SVGRectElement | null;
     if (rect) {
       rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
-      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.5px');
       rect.setAttribute('rx', '8');
       rect.setAttribute('ry', '8');

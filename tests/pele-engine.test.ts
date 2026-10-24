@@ -217,7 +217,7 @@ Vehicle <|-- ElectricCar`;
     // Divider paths must have fill none and valid stroke
     for (const divider of doc.querySelectorAll('.pele-divider, path.pele-divider')) {
       assert.equal(divider.getAttribute('fill'), 'none', 'Divider must not be filled with solid color');
-      assert.equal(divider.getAttribute('stroke'), palette.border, 'Divider must have palette border stroke');
+      assert.ok(palette.borders.includes(divider.getAttribute('stroke') || ''), 'Divider must have coordinated palette border stroke');
     }
 
     // Members must have start text-anchor
@@ -308,6 +308,12 @@ M1 :milestone, m1, 2024-02-05, 0d`;
       // Label x coordinate must be inside the rect [rx, rx + rw]
       assert.ok(lx >= rx && lx <= rx + rw, `Label x (${lx}) must be inside rect [${rx}, ${rx + rw}]`);
       assert.equal(label.getAttribute('text-anchor'), 'middle', 'Task text must be middle-anchored inside task bar');
+
+      // Verify task bar fill is from coordinated palette and text has high contrast
+      const fill = rect.getAttribute('fill') || '';
+      assert.ok(fill, 'Task bar must have fill');
+      const textFill = label.getAttribute('fill') || '';
+      assert.ok(textFill === '#edf2fa' || textFill === '#ffffff' || textFill === '#0f172a', 'Task text must have high contrast fill');
     }
   });
 
@@ -321,10 +327,11 @@ requirement test_req {
 }`;
 
     const kanbanText = `kanban
-Todo
-[Task 1]
-Doing
-[Task 2]`;
+backlog[📋 Ready for Planning]
+  task1[Explore WebGL GPU acceleration]
+  task2[Interactive node drag handles]
+wip[⚡ Actively in Progress]
+  task3[Disjoint interval branch spacing]`;
 
     const palette = resolvePaletteData('multi', 'clear', 'slate', true);
     const reqSvg = renderWithPele({
@@ -354,6 +361,13 @@ Doing
     }
     for (const count of kanbanDoc.querySelectorAll('.pele-count')) {
       assert.equal(count.getAttribute('text-anchor'), 'end', 'Kanban count badge must have end text-anchor');
+    }
+
+    // Kanban card task text must be start-aligned
+    for (const card of kanbanDoc.querySelectorAll('g.pele-card')) {
+      for (const cardText of card.querySelectorAll('text')) {
+        assert.equal(cardText.getAttribute('text-anchor'), 'start', 'Kanban card text must be start-aligned');
+      }
     }
   });
 });

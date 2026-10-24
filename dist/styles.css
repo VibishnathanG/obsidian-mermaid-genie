@@ -161,14 +161,23 @@
   line-height: 1.35 !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-count),
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .pele-label:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-cluster-label) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-count):not(.pele-card *):not(.pele-card):not([class*="pele-card"]):not([class*="kanban"]),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .pele-label:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-cluster-label):not(.pele-card *):not(.pele-card):not([class*="pele-card"]):not([class*="kanban"]) {
   fill: var(--node-text, var(--mpe-text));
   text-anchor: middle !important;
 }
 
-/* Left-aligned member, attribute, and field text (Class, ER, Requirement, Kanban) */
+/* Left-aligned member, attribute, field, and Kanban card text */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(
+  .pele-card text,
+  .pele-card .pele-label,
+  .pele-card-label,
+  .pele-kanban .pele-card text,
+  .pele-kanban .pele-card .pele-label,
+  .kanban-item text,
+  .kanban-item .nodeLabel,
+  .kanban-item p,
+  .kanban-item span,
   .pele-member,
   .pele-attribute,
   .pele-method,
