@@ -27,6 +27,11 @@ export function renderWithPele(options: PeleRenderOptions): string | null {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
       fontSize: 14,
       idPrefix: id ? `${id}-` : undefined,
+      measurer: {
+        width(str: string, size: number) {
+          return str.length * (size * 0.65) * 1.25;
+        },
+      },
     });
 
     if (!result?.svg) return null;
@@ -143,8 +148,195 @@ export function enhancePeleSvg(
     }
   }
 
-  // Apply Genie's signature coordinated multi-color branch palette blocks
-  applyFlowchartColors(root, palette, dark, settings.colorStyle);
+  // Diagram type classification
+  const isPeleFlowchart = root.classList.contains('pele-flowchart') || root.getAttribute('aria-roledescription') === 'flowchart';
+  const isPeleClass = root.classList.contains('pele-class') || root.getAttribute('aria-roledescription') === 'class';
+  const isPeleEr = root.classList.contains('pele-er') || root.getAttribute('aria-roledescription') === 'er';
+  const isPeleGantt = root.classList.contains('pele-gantt') || root.getAttribute('aria-roledescription') === 'gantt';
+  const isPeleReq = root.classList.contains('pele-requirement') || root.getAttribute('aria-roledescription') === 'requirement';
+  const isPeleKanban = root.classList.contains('pele-kanban') || root.getAttribute('aria-roledescription') === 'kanban';
+
+  // Apply Genie's signature coordinated multi-color branch palette blocks only to flowcharts
+  if (isPeleFlowchart) {
+    applyFlowchartColors(root, palette, dark, settings.colorStyle);
+  }
+
+  // Specialized diagram styling for Class, ER, Gantt, Requirement, and Kanban
+  if (isPeleClass) {
+    // Inter-box divider lines must strictly be stroke lines without solid fill
+    for (const divider of Array.from(doc.querySelectorAll('.pele-divider, path.pele-divider'))) {
+      divider.setAttribute('fill', 'none');
+      divider.setAttribute('stroke', palette.border);
+      divider.setAttribute('stroke-width', '1.25px');
+    }
+    // Class nodes
+    for (const node of Array.from(doc.querySelectorAll('g.pele-class'))) {
+      const rect = node.querySelector(':scope > rect');
+      if (rect) {
+        rect.setAttribute('fill', palette.surface);
+        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '6');
+        rect.setAttribute('ry', '6');
+      }
+      const title = node.querySelector(':scope > text.pele-label');
+      if (title) {
+        title.setAttribute('fill', palette.text);
+        title.setAttribute('text-anchor', 'middle');
+        title.setAttribute('font-weight', 'bold');
+      }
+      for (const member of Array.from(node.querySelectorAll('.pele-member, .pele-attribute, .pele-method'))) {
+        member.setAttribute('fill', palette.text);
+        member.setAttribute('text-anchor', 'start');
+      }
+    }
+    // Relation lines and inheritance markers
+    for (const marker of Array.from(doc.querySelectorAll('.pele-marker'))) {
+      marker.setAttribute('fill', palette.surface);
+      marker.setAttribute('stroke', palette.line);
+    }
+  }
+
+  if (isPeleEr) {
+    // Inter-box divider lines
+    for (const divider of Array.from(doc.querySelectorAll('.pele-er-divider, path.pele-er-divider'))) {
+      divider.setAttribute('fill', 'none');
+      divider.setAttribute('stroke', palette.border);
+      divider.setAttribute('stroke-width', '1.25px');
+    }
+    // Entity nodes
+    for (const node of Array.from(doc.querySelectorAll('g.pele-entity'))) {
+      const rect = node.querySelector(':scope > rect');
+      if (rect) {
+        rect.setAttribute('fill', palette.surface);
+        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '6');
+        rect.setAttribute('ry', '6');
+      }
+      // Zebra stripes
+      const stripes = Array.from(node.querySelectorAll('g.pele-er-stripes rect'));
+      for (let i = 0; i < stripes.length; i++) {
+        const stripe = stripes[i]!;
+        stripe.setAttribute('fill', i % 2 === 0 ? palette.surface : (palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9')));
+      }
+      const title = node.querySelector(':scope > text.pele-label');
+      if (title) {
+        title.setAttribute('fill', palette.text);
+        title.setAttribute('text-anchor', 'middle');
+        title.setAttribute('font-weight', 'bold');
+      }
+      for (const text of Array.from(node.querySelectorAll('.pele-er-type, .pele-er-name'))) {
+        text.setAttribute('fill', palette.text);
+        text.setAttribute('text-anchor', 'start');
+      }
+      for (const key of Array.from(node.querySelectorAll('.pele-er-keys'))) {
+        key.setAttribute('fill', palette.accent);
+        key.setAttribute('text-anchor', 'start');
+        key.setAttribute('font-weight', 'bold');
+      }
+    }
+  }
+
+  if (isPeleGantt) {
+    for (const taskGroup of Array.from(doc.querySelectorAll('g.pele-task'))) {
+      const isMilestone = taskGroup.classList.contains('pele-milestone') || !!taskGroup.querySelector('path');
+      const text = taskGroup.querySelector('text.pele-label, text');
+      if (isMilestone) {
+        if (text) {
+          text.setAttribute('fill', palette.text);
+        }
+        continue;
+      }
+
+      const rect = taskGroup.querySelector('rect');
+      if (!rect || !text) continue;
+
+      const rx = parseFloat(rect.getAttribute('x') || '0');
+      const ry = parseFloat(rect.getAttribute('y') || '0');
+      let rw = parseFloat(rect.getAttribute('width') || '0');
+      const rh = parseFloat(rect.getAttribute('height') || '24');
+
+      const textContent = (text.textContent || '').trim();
+      const minWidth = Math.max(rw, textContent.length * 7.5 + 24);
+
+      if (rw < minWidth) {
+        rw = minWidth;
+        rect.setAttribute('width', String(rw));
+      }
+
+      // Enclose text inside task box
+      const cx = rx + rw / 2;
+      const cy = ry + rh / 2 + 4.5;
+      text.setAttribute('x', String(cx));
+      text.setAttribute('y', String(cy));
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('fill', dark ? '#0f172a' : '#ffffff');
+      text.setAttribute('font-weight', '600');
+    }
+    for (const title of Array.from(doc.querySelectorAll('.pele-title, .pele-section-label, .pele-axis text'))) {
+      title.setAttribute('fill', palette.text);
+    }
+  }
+
+  if (isPeleReq) {
+    for (const divider of Array.from(doc.querySelectorAll('.pele-divider, path.pele-divider'))) {
+      divider.setAttribute('fill', 'none');
+      divider.setAttribute('stroke', palette.border);
+      divider.setAttribute('stroke-width', '1.25px');
+    }
+    for (const node of Array.from(doc.querySelectorAll('g.pele-requirement, g.pele-element'))) {
+      const rect = node.querySelector(':scope > rect');
+      if (rect) {
+        rect.setAttribute('fill', palette.surface);
+        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '6');
+        rect.setAttribute('ry', '6');
+      }
+      const title = node.querySelector(':scope > text.pele-label');
+      if (title) {
+        title.setAttribute('fill', palette.text);
+        title.setAttribute('text-anchor', 'middle');
+        title.setAttribute('font-weight', 'bold');
+      }
+      const stereo = node.querySelector(':scope > text.pele-stereotype');
+      if (stereo) {
+        stereo.setAttribute('fill', dark ? '#94a3b8' : '#64748b');
+        stereo.setAttribute('text-anchor', 'middle');
+      }
+      for (const field of Array.from(node.querySelectorAll('.pele-field, .pele-field tspan'))) {
+        field.setAttribute('fill', dark ? '#94a3b8' : '#64748b');
+        field.setAttribute('text-anchor', 'start');
+      }
+      for (const val of Array.from(node.querySelectorAll('.pele-value, .pele-value tspan'))) {
+        val.setAttribute('fill', palette.text);
+        val.setAttribute('text-anchor', 'start');
+      }
+    }
+  }
+
+  if (isPeleKanban) {
+    for (const col of Array.from(doc.querySelectorAll('g.pele-column, g.pele-cluster'))) {
+      const rect = col.querySelector(':scope > rect');
+      if (rect) {
+        rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
+        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '8');
+        rect.setAttribute('ry', '8');
+      }
+      for (const title of Array.from(col.querySelectorAll('.pele-cluster-label'))) {
+        title.setAttribute('fill', palette.text);
+        title.setAttribute('text-anchor', 'start');
+        title.setAttribute('font-weight', 'bold');
+      }
+      for (const count of Array.from(col.querySelectorAll('.pele-count'))) {
+        count.setAttribute('fill', dark ? '#94a3b8' : '#64748b');
+        count.setAttribute('text-anchor', 'end');
+      }
+    }
+  }
 
   return new XMLSerializer().serializeToString(doc.documentElement);
 }

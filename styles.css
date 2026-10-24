@@ -73,12 +73,19 @@
 }
 
 /* Primary Node Shapes */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, circle, ellipse, polygon, path),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, circle, ellipse, polygon, path:not(.pele-divider):not(.pele-er-divider):not([class*="divider"])),
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > .label-container,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node:not(:has(> .label-container)) :is(rect, circle, ellipse, polygon):not(.label *):not(.nodeLabel *) {
   fill: var(--node-fill, var(--mpe-node));
   stroke: var(--node-border, var(--mpe-border));
   stroke-width: 1.25px;
+}
+
+/* Inter-box Divider Lines: Class, ER, Requirement Diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-divider, .pele-er-divider, path.divider, line.divider, [class*="divider"], g.divider path, .classDiagram line, .requirementDiagram line) {
+  fill: none !important;
+  stroke: var(--pele-border, var(--mpe-border)) !important;
+  stroke-width: 1.25px !important;
 }
 
 .theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, polygon, circle, ellipse),
@@ -154,10 +161,57 @@
   line-height: 1.35 !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .pele-label {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-count),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .pele-label:not(.pele-member):not(.pele-attribute):not(.pele-method):not(.pele-er-type):not(.pele-er-name):not(.pele-er-keys):not(.pele-field):not(.pele-value):not(.pele-cluster-label) {
   fill: var(--node-text, var(--mpe-text));
   text-anchor: middle !important;
+}
+
+/* Left-aligned member, attribute, and field text (Class, ER, Requirement, Kanban) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(
+  .pele-member,
+  .pele-attribute,
+  .pele-method,
+  .pele-er-type,
+  .pele-er-name,
+  .pele-er-keys,
+  .pele-field,
+  .pele-field tspan,
+  .pele-value,
+  .pele-value tspan,
+  .pele-cluster-label,
+  .classDiagram .members-group text,
+  .classDiagram .methods-group text,
+  .attribute-type,
+  .attribute-name,
+  .attribute-keys,
+  text.er.entityText,
+  .reqText,
+  .reqLabel,
+  .reqField,
+  .reqValue
+) {
+  text-anchor: start !important;
+  text-align: left !important;
+}
+
+/* Kanban count badge: Right-aligned */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-count, .kanban-count) {
+  text-anchor: end !important;
+  text-align: right !important;
+}
+
+/* ER Key Badges (PK, FK) */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-er-keys, .attribute-keys foreignObject div, .attribute-keys .nodeLabel, .attribute-keys p, .attribute-keys span, .attribute-keys text) {
+  fill: var(--mpe-highlight, var(--pele-accent)) !important;
+  color: var(--mpe-highlight, var(--pele-accent)) !important;
+  font-weight: 700 !important;
+}
+
+/* Gantt task text enclosed inside task bars */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-task .pele-label, .taskText, .taskTextInside) {
+  text-anchor: middle !important;
+  font-weight: 600 !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .nodeLabel p {

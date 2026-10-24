@@ -2125,7 +2125,7 @@ function fixGanttChart(doc, palette, dark) {
     ms2.setAttribute("fill", palette.accent);
     ms2.setAttribute("stroke", palette.accent);
   }
-  for (const text of doc.querySelectorAll(".milestoneText, .taskTextOutsideRight")) {
+  for (const text of doc.querySelectorAll(".milestoneText")) {
     const x = parseFloat(text.getAttribute("x") || "0");
     if (x > 0) {
       text.setAttribute("x", String(x + 14));
@@ -2134,6 +2134,61 @@ function fixGanttChart(doc, palette, dark) {
     if (text.style) {
       text.style.setProperty("fill", palette.text, "important");
       text.style.setProperty("color", palette.text, "important");
+    }
+  }
+  for (const text of Array.from(doc.querySelectorAll(".taskTextOutsideRight, .taskTextOutsideLeft, .taskTextOutside"))) {
+    if (text.classList.contains("milestoneText")) continue;
+    const ty2 = parseFloat(text.getAttribute("y") || "0");
+    let matchedRect = null;
+    const textId = text.id || "";
+    if (textId) {
+      const candidateId = textId.replace(/-text$/, "");
+      const candidate = doc.getElementById(candidateId);
+      if (candidate && candidate.tagName.toLowerCase() === "rect") {
+        matchedRect = candidate;
+      }
+    }
+    if (!matchedRect) {
+      let minDist = Infinity;
+      for (const r of Array.from(doc.querySelectorAll('rect.task, rect[class*="task"]:not(.milestone)'))) {
+        const ry2 = parseFloat(r.getAttribute("y") || "0");
+        const dist = Math.abs(ry2 - ty2);
+        if (dist < 30 && dist < minDist) {
+          minDist = dist;
+          matchedRect = r;
+        }
+      }
+    }
+    if (matchedRect) {
+      const rx2 = parseFloat(matchedRect.getAttribute("x") || "0");
+      const ry2 = parseFloat(matchedRect.getAttribute("y") || "0");
+      let rw2 = parseFloat(matchedRect.getAttribute("width") || "0");
+      const rh2 = parseFloat(matchedRect.getAttribute("height") || "20");
+      const textLen = (text.textContent || "").trim().length;
+      const minWidth = Math.max(rw2, textLen * 7.5 + 24);
+      if (rw2 < minWidth) {
+        rw2 = minWidth;
+        matchedRect.setAttribute("width", String(rw2));
+      }
+      text.setAttribute("x", String(rx2 + rw2 / 2));
+      text.setAttribute("y", String(ry2 + rh2 / 2 + 4.5));
+      text.setAttribute("text-anchor", "middle");
+      text.classList.remove("taskTextOutsideRight", "taskTextOutsideLeft", "taskTextOutside");
+      text.classList.add("taskText");
+      const isDarkActive = dark && (matchedRect.classList.contains("active") || text.classList.contains("active"));
+      const fillCol = isDarkActive ? "#0f172a" : dark ? "#ffffff" : palette.text;
+      text.setAttribute("fill", fillCol);
+      if (text.style) {
+        text.style.setProperty("fill", fillCol, "important");
+        text.style.setProperty("color", fillCol, "important");
+        text.style.setProperty("text-anchor", "middle", "important");
+      }
+    } else {
+      text.setAttribute("fill", palette.text);
+      if (text.style) {
+        text.style.setProperty("fill", palette.text, "important");
+        text.style.setProperty("color", palette.text, "important");
+      }
     }
   }
   for (const line of doc.querySelectorAll(".grid line, line.tick")) {
@@ -24105,7 +24160,12 @@ function renderWithPele(options) {
     const result = P1(text, {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
       fontSize: 14,
-      idPrefix: id2 ? `${id2}-` : void 0
+      idPrefix: id2 ? `${id2}-` : void 0,
+      measurer: {
+        width(str, size) {
+          return str.length * (size * 0.65) * 1.25;
+        }
+      }
     });
     if (!result?.svg) return null;
     return enhancePeleSvg(result.svg, id2, settings, palette, dark);
@@ -24186,7 +24246,174 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       text.setAttribute("fill", palette.text);
     }
   }
-  applyFlowchartColors(root, palette, dark, settings.colorStyle);
+  const isPeleFlowchart = root.classList.contains("pele-flowchart") || root.getAttribute("aria-roledescription") === "flowchart";
+  const isPeleClass = root.classList.contains("pele-class") || root.getAttribute("aria-roledescription") === "class";
+  const isPeleEr = root.classList.contains("pele-er") || root.getAttribute("aria-roledescription") === "er";
+  const isPeleGantt = root.classList.contains("pele-gantt") || root.getAttribute("aria-roledescription") === "gantt";
+  const isPeleReq = root.classList.contains("pele-requirement") || root.getAttribute("aria-roledescription") === "requirement";
+  const isPeleKanban = root.classList.contains("pele-kanban") || root.getAttribute("aria-roledescription") === "kanban";
+  if (isPeleFlowchart) {
+    applyFlowchartColors(root, palette, dark, settings.colorStyle);
+  }
+  if (isPeleClass) {
+    for (const divider of Array.from(doc.querySelectorAll(".pele-divider, path.pele-divider"))) {
+      divider.setAttribute("fill", "none");
+      divider.setAttribute("stroke", palette.border);
+      divider.setAttribute("stroke-width", "1.25px");
+    }
+    for (const node of Array.from(doc.querySelectorAll("g.pele-class"))) {
+      const rect = node.querySelector(":scope > rect");
+      if (rect) {
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("ry", "6");
+      }
+      const title = node.querySelector(":scope > text.pele-label");
+      if (title) {
+        title.setAttribute("fill", palette.text);
+        title.setAttribute("text-anchor", "middle");
+        title.setAttribute("font-weight", "bold");
+      }
+      for (const member of Array.from(node.querySelectorAll(".pele-member, .pele-attribute, .pele-method"))) {
+        member.setAttribute("fill", palette.text);
+        member.setAttribute("text-anchor", "start");
+      }
+    }
+    for (const marker of Array.from(doc.querySelectorAll(".pele-marker"))) {
+      marker.setAttribute("fill", palette.surface);
+      marker.setAttribute("stroke", palette.line);
+    }
+  }
+  if (isPeleEr) {
+    for (const divider of Array.from(doc.querySelectorAll(".pele-er-divider, path.pele-er-divider"))) {
+      divider.setAttribute("fill", "none");
+      divider.setAttribute("stroke", palette.border);
+      divider.setAttribute("stroke-width", "1.25px");
+    }
+    for (const node of Array.from(doc.querySelectorAll("g.pele-entity"))) {
+      const rect = node.querySelector(":scope > rect");
+      if (rect) {
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("ry", "6");
+      }
+      const stripes = Array.from(node.querySelectorAll("g.pele-er-stripes rect"));
+      for (let i = 0; i < stripes.length; i++) {
+        const stripe = stripes[i];
+        stripe.setAttribute("fill", i % 2 === 0 ? palette.surface : palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
+      }
+      const title = node.querySelector(":scope > text.pele-label");
+      if (title) {
+        title.setAttribute("fill", palette.text);
+        title.setAttribute("text-anchor", "middle");
+        title.setAttribute("font-weight", "bold");
+      }
+      for (const text of Array.from(node.querySelectorAll(".pele-er-type, .pele-er-name"))) {
+        text.setAttribute("fill", palette.text);
+        text.setAttribute("text-anchor", "start");
+      }
+      for (const key of Array.from(node.querySelectorAll(".pele-er-keys"))) {
+        key.setAttribute("fill", palette.accent);
+        key.setAttribute("text-anchor", "start");
+        key.setAttribute("font-weight", "bold");
+      }
+    }
+  }
+  if (isPeleGantt) {
+    for (const taskGroup of Array.from(doc.querySelectorAll("g.pele-task"))) {
+      const isMilestone = taskGroup.classList.contains("pele-milestone") || !!taskGroup.querySelector("path");
+      const text = taskGroup.querySelector("text.pele-label, text");
+      if (isMilestone) {
+        if (text) {
+          text.setAttribute("fill", palette.text);
+        }
+        continue;
+      }
+      const rect = taskGroup.querySelector("rect");
+      if (!rect || !text) continue;
+      const rx2 = parseFloat(rect.getAttribute("x") || "0");
+      const ry2 = parseFloat(rect.getAttribute("y") || "0");
+      let rw2 = parseFloat(rect.getAttribute("width") || "0");
+      const rh2 = parseFloat(rect.getAttribute("height") || "24");
+      const textContent = (text.textContent || "").trim();
+      const minWidth = Math.max(rw2, textContent.length * 7.5 + 24);
+      if (rw2 < minWidth) {
+        rw2 = minWidth;
+        rect.setAttribute("width", String(rw2));
+      }
+      const cx2 = rx2 + rw2 / 2;
+      const cy2 = ry2 + rh2 / 2 + 4.5;
+      text.setAttribute("x", String(cx2));
+      text.setAttribute("y", String(cy2));
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("fill", dark ? "#0f172a" : "#ffffff");
+      text.setAttribute("font-weight", "600");
+    }
+    for (const title of Array.from(doc.querySelectorAll(".pele-title, .pele-section-label, .pele-axis text"))) {
+      title.setAttribute("fill", palette.text);
+    }
+  }
+  if (isPeleReq) {
+    for (const divider of Array.from(doc.querySelectorAll(".pele-divider, path.pele-divider"))) {
+      divider.setAttribute("fill", "none");
+      divider.setAttribute("stroke", palette.border);
+      divider.setAttribute("stroke-width", "1.25px");
+    }
+    for (const node of Array.from(doc.querySelectorAll("g.pele-requirement, g.pele-element"))) {
+      const rect = node.querySelector(":scope > rect");
+      if (rect) {
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("ry", "6");
+      }
+      const title = node.querySelector(":scope > text.pele-label");
+      if (title) {
+        title.setAttribute("fill", palette.text);
+        title.setAttribute("text-anchor", "middle");
+        title.setAttribute("font-weight", "bold");
+      }
+      const stereo = node.querySelector(":scope > text.pele-stereotype");
+      if (stereo) {
+        stereo.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
+        stereo.setAttribute("text-anchor", "middle");
+      }
+      for (const field of Array.from(node.querySelectorAll(".pele-field, .pele-field tspan"))) {
+        field.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
+        field.setAttribute("text-anchor", "start");
+      }
+      for (const val of Array.from(node.querySelectorAll(".pele-value, .pele-value tspan"))) {
+        val.setAttribute("fill", palette.text);
+        val.setAttribute("text-anchor", "start");
+      }
+    }
+  }
+  if (isPeleKanban) {
+    for (const col of Array.from(doc.querySelectorAll("g.pele-column, g.pele-cluster"))) {
+      const rect = col.querySelector(":scope > rect");
+      if (rect) {
+        rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc"));
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "8");
+        rect.setAttribute("ry", "8");
+      }
+      for (const title of Array.from(col.querySelectorAll(".pele-cluster-label"))) {
+        title.setAttribute("fill", palette.text);
+        title.setAttribute("text-anchor", "start");
+        title.setAttribute("font-weight", "bold");
+      }
+      for (const count of Array.from(col.querySelectorAll(".pele-count"))) {
+        count.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
+        count.setAttribute("text-anchor", "end");
+      }
+    }
+  }
   return new XMLSerializer().serializeToString(doc.documentElement);
 }
 

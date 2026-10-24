@@ -188,4 +188,172 @@ describe('Pele Engine Integration & Cosmetics', () => {
 
     assert.equal(resultSvg, null, 'Must return null so Genie gracefully falls back to Mermaid.js');
   });
+
+  it('renders Class diagrams with wide boxes, non-filled dividers, and start-anchored members', () => {
+    const text = `classDiagram
+class Vehicle {
+  +String make
+  +startEngine() : void
+}
+class ElectricCar {
+  +int batteryCapacity
+  +charge() : void
+}
+Vehicle <|-- ElectricCar`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const resultSvg = renderWithPele({
+      text,
+      id: 'class-diagram-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+
+    assert.ok(resultSvg, 'Class diagram should render with Pele');
+    const dom = new (require('jsdom')).JSDOM(resultSvg);
+    const doc = dom.window.document;
+
+    // Divider paths must have fill none and valid stroke
+    for (const divider of doc.querySelectorAll('.pele-divider, path.pele-divider')) {
+      assert.equal(divider.getAttribute('fill'), 'none', 'Divider must not be filled with solid color');
+      assert.equal(divider.getAttribute('stroke'), palette.border, 'Divider must have palette border stroke');
+    }
+
+    // Members must have start text-anchor
+    for (const member of doc.querySelectorAll('.pele-member, .pele-attribute, .pele-method')) {
+      assert.equal(member.getAttribute('text-anchor'), 'start', 'Member text must be left-aligned with start anchor');
+      assert.equal(member.getAttribute('fill'), palette.text, 'Member text must have palette text fill');
+    }
+
+    // Class box width should be expanded by custom measurer (at least 200px)
+    const vehicleRect = doc.querySelector('g.pele-class[data-id="Vehicle"] rect');
+    assert.ok(vehicleRect);
+    const vehicleWidth = parseFloat(vehicleRect.getAttribute('width') || '0');
+    assert.ok(vehicleWidth >= 200, `Vehicle box width (${vehicleWidth}) should be >= 200px`);
+  });
+
+  it('renders ER diagrams with left-aligned attributes and highlighted PK keys', () => {
+    const text = `erDiagram
+CUSTOMER ||--o{ ORDER : places
+CUSTOMER {
+  string customer_id PK
+  string name
+  float total_amount
+}`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const resultSvg = renderWithPele({
+      text,
+      id: 'er-diagram-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+
+    assert.ok(resultSvg, 'ER diagram should render with Pele');
+    const dom = new (require('jsdom')).JSDOM(resultSvg);
+    const doc = dom.window.document;
+
+    // Divider path must have fill none
+    for (const divider of doc.querySelectorAll('.pele-er-divider, path.pele-er-divider')) {
+      assert.equal(divider.getAttribute('fill'), 'none', 'ER divider must not be filled with solid color');
+    }
+
+    // Attribute types and names must be start anchored
+    for (const attr of doc.querySelectorAll('.pele-er-type, .pele-er-name')) {
+      assert.equal(attr.getAttribute('text-anchor'), 'start', 'ER attribute must have start text-anchor');
+    }
+
+    // PK key badge should have accent fill
+    const pkKey = doc.querySelector('.pele-er-keys');
+    assert.ok(pkKey, 'PK key element should exist');
+    assert.equal(pkKey.getAttribute('fill'), palette.accent, 'PK key badge should have accent fill');
+  });
+
+  it('encloses Gantt chart task text cleanly inside task bars', () => {
+    const text = `gantt
+title Project Timeline
+dateFormat YYYY-MM-DD
+section Core
+Long task :a1, 2024-01-01, 30d
+Short :after a1, 1d
+M1 :milestone, m1, 2024-02-05, 0d`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const resultSvg = renderWithPele({
+      text,
+      id: 'gantt-diagram-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+
+    assert.ok(resultSvg, 'Gantt chart should render with Pele');
+    const dom = new (require('jsdom')).JSDOM(resultSvg);
+    const doc = dom.window.document;
+
+    // Normal and short tasks: text must be centered inside task bar rect
+    const tasks = doc.querySelectorAll('g.pele-task:not(.pele-milestone)');
+    assert.ok(tasks.length >= 2, 'Should have at least 2 non-milestone tasks');
+    for (const task of tasks) {
+      const rect = task.querySelector('rect');
+      const label = task.querySelector('text.pele-label, text');
+      assert.ok(rect && label);
+
+      const rx = parseFloat(rect.getAttribute('x') || '0');
+      const rw = parseFloat(rect.getAttribute('width') || '0');
+      const lx = parseFloat(label.getAttribute('x') || '0');
+
+      // Label x coordinate must be inside the rect [rx, rx + rw]
+      assert.ok(lx >= rx && lx <= rx + rw, `Label x (${lx}) must be inside rect [${rx}, ${rx + rw}]`);
+      assert.equal(label.getAttribute('text-anchor'), 'middle', 'Task text must be middle-anchored inside task bar');
+    }
+  });
+
+  it('renders Requirement and Kanban diagrams with proper field and header alignment', () => {
+    const reqText = `requirementDiagram
+requirement test_req {
+  id: 1
+  text: the test text.
+  risk: high
+  verifymethod: test
+}`;
+
+    const kanbanText = `kanban
+Todo
+[Task 1]
+Doing
+[Task 2]`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const reqSvg = renderWithPele({
+      text: reqText,
+      id: 'req-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(reqSvg);
+    const reqDoc = new (require('jsdom')).JSDOM(reqSvg).window.document;
+    for (const field of reqDoc.querySelectorAll('.pele-field, .pele-value')) {
+      assert.equal(field.getAttribute('text-anchor'), 'start', 'Requirement fields must have start text-anchor');
+    }
+
+    const kanbanSvg = renderWithPele({
+      text: kanbanText,
+      id: 'kanban-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(kanbanSvg);
+    const kanbanDoc = new (require('jsdom')).JSDOM(kanbanSvg).window.document;
+    for (const label of kanbanDoc.querySelectorAll('.pele-cluster-label')) {
+      assert.equal(label.getAttribute('text-anchor'), 'start', 'Kanban column headers must have start text-anchor');
+    }
+    for (const count of kanbanDoc.querySelectorAll('.pele-count')) {
+      assert.equal(count.getAttribute('text-anchor'), 'end', 'Kanban count badge must have end text-anchor');
+    }
+  });
 });

@@ -925,7 +925,7 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     ms.setAttribute('fill', palette.accent);
     ms.setAttribute('stroke', palette.accent);
   }
-  for (const text of doc.querySelectorAll('.milestoneText, .taskTextOutsideRight')) {
+  for (const text of doc.querySelectorAll('.milestoneText')) {
     const x = parseFloat(text.getAttribute('x') || '0');
     if (x > 0) {
       text.setAttribute('x', String(x + 14));
@@ -934,6 +934,66 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     if ((text as HTMLElement).style) {
       (text as HTMLElement).style.setProperty('fill', palette.text, 'important');
       (text as HTMLElement).style.setProperty('color', palette.text, 'important');
+    }
+  }
+
+  // Non-milestone task bars: enclose text cleanly inside the task bar
+  for (const text of Array.from(doc.querySelectorAll('.taskTextOutsideRight, .taskTextOutsideLeft, .taskTextOutside'))) {
+    if (text.classList.contains('milestoneText')) continue;
+    const ty = parseFloat(text.getAttribute('y') || '0');
+    let matchedRect: SVGRectElement | null = null;
+    const textId = text.id || '';
+    if (textId) {
+      const candidateId = textId.replace(/-text$/, '');
+      const candidate = doc.getElementById(candidateId);
+      if (candidate && candidate.tagName.toLowerCase() === 'rect') {
+        matchedRect = candidate as unknown as SVGRectElement;
+      }
+    }
+    if (!matchedRect) {
+      let minDist = Infinity;
+      for (const r of Array.from(doc.querySelectorAll('rect.task, rect[class*="task"]:not(.milestone)')) as SVGRectElement[]) {
+        const ry = parseFloat(r.getAttribute('y') || '0');
+        const dist = Math.abs(ry - ty);
+        if (dist < 30 && dist < minDist) {
+          minDist = dist;
+          matchedRect = r;
+        }
+      }
+    }
+
+    if (matchedRect) {
+      const rx = parseFloat(matchedRect.getAttribute('x') || '0');
+      const ry = parseFloat(matchedRect.getAttribute('y') || '0');
+      let rw = parseFloat(matchedRect.getAttribute('width') || '0');
+      const rh = parseFloat(matchedRect.getAttribute('height') || '20');
+
+      const textLen = (text.textContent || '').trim().length;
+      const minWidth = Math.max(rw, textLen * 7.5 + 24);
+      if (rw < minWidth) {
+        rw = minWidth;
+        matchedRect.setAttribute('width', String(rw));
+      }
+
+      text.setAttribute('x', String(rx + rw / 2));
+      text.setAttribute('y', String(ry + rh / 2 + 4.5));
+      text.setAttribute('text-anchor', 'middle');
+      text.classList.remove('taskTextOutsideRight', 'taskTextOutsideLeft', 'taskTextOutside');
+      text.classList.add('taskText');
+      const isDarkActive = dark && (matchedRect.classList.contains('active') || text.classList.contains('active'));
+      const fillCol = isDarkActive ? '#0f172a' : (dark ? '#ffffff' : palette.text);
+      text.setAttribute('fill', fillCol);
+      if ((text as HTMLElement).style) {
+        (text as HTMLElement).style.setProperty('fill', fillCol, 'important');
+        (text as HTMLElement).style.setProperty('color', fillCol, 'important');
+        (text as HTMLElement).style.setProperty('text-anchor', 'middle', 'important');
+      }
+    } else {
+      text.setAttribute('fill', palette.text);
+      if ((text as HTMLElement).style) {
+        (text as HTMLElement).style.setProperty('fill', palette.text, 'important');
+        (text as HTMLElement).style.setProperty('color', palette.text, 'important');
+      }
     }
   }
 
