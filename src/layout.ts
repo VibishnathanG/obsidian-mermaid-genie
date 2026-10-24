@@ -493,7 +493,7 @@ export function fixClusterHeaderOverlap(doc: Document): void {
     const cardHeight = nodeCard ? parseFloat(nodeCard.getAttribute('height') || '40') : 40;
     const cardTop = firstNode.y - cardHeight / 2;
 
-    const desiredCardTop = labelBottomY + 14;
+    const desiredCardTop = labelBottomY + 20;
     if (cardTop < desiredCardTop) {
       const shiftY = Math.ceil(desiredCardTop - cardTop);
       if (shiftY > 0 && shiftY < 200) {
@@ -757,39 +757,67 @@ export function fixC4RelationshipCollisions(doc: Document, palette: PaletteData)
 export function fixRequirementDiagram(doc: Document, palette: PaletteData, _dark: boolean): void {
   const root = doc.documentElement;
   const isReq = root.classList.contains('requirementDiagram') ||
-    !!doc.querySelector('.requirementDiagram, g.requirement, g.element, .reqBox, .reqTitle');
+    root.getAttribute('aria-roledescription') === 'requirement' ||
+    !!doc.querySelector('.requirementDiagram, g.requirement, g.element, .reqBox, .reqTitle, g[class*="req-"]');
   if (!isReq) return;
 
-  for (const rect of doc.querySelectorAll('.reqBox, .requirementDiagram g.node rect, .requirementDiagram rect.basic')) {
-    rect.setAttribute('fill', palette.surface);
-    rect.setAttribute('stroke', palette.border);
-    rect.setAttribute('stroke-width', '1.5px');
-    rect.setAttribute('rx', '6');
-    rect.setAttribute('ry', '6');
-  }
-
-  for (const node of doc.querySelectorAll('.requirementDiagram g.node')) {
+  // Box shapes (rects and modern Mermaid outer-path paths)
+  for (const node of doc.querySelectorAll('.requirementDiagram g.node, g.requirement, g.element, g[class*="req-"]')) {
     const textContent = node.textContent || '';
-    if (textContent.includes('<<Element>>') || textContent.includes('type:')) {
-      const rect = node.querySelector('rect, path.outer-path');
-      if (rect) {
-        rect.setAttribute('fill', palette.clusterBkg ?? palette.surface);
-        rect.setAttribute('stroke', palette.accent);
-        rect.setAttribute('stroke-width', '1.5px');
+    const isElement = textContent.includes('<<Element>>') || textContent.includes('type:');
+    const fill = isElement ? (palette.clusterBkg ?? palette.surface) : palette.surface;
+    const stroke = isElement ? palette.accent : palette.border;
+
+    for (const rect of node.querySelectorAll(':scope > rect, rect.basic, .reqBox, rect')) {
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '6');
+      rect.setAttribute('ry', '6');
+    }
+
+    for (const path of node.querySelectorAll('g.outer-path path, g.basic path, path.basic')) {
+      const currentFill = path.getAttribute('fill');
+      const currentStroke = path.getAttribute('stroke');
+      if (currentStroke && currentStroke !== 'none' && currentStroke !== 'transparent') {
+        path.setAttribute('stroke', stroke);
+        path.setAttribute('stroke-width', '1.5px');
+      } else if (currentFill && currentFill !== 'none') {
+        path.setAttribute('fill', fill);
+      }
+    }
+
+    // Ensure clean padding on HTML labels inside foreignObject so text doesn't touch the borders
+    for (const foDiv of node.querySelectorAll('foreignObject div, .nodeLabel')) {
+      const divEl = foDiv as HTMLElement;
+      if (divEl.style) {
+        divEl.style.color = palette.text;
+        if (!divEl.style.padding || divEl.style.padding === '0px') {
+          divEl.style.padding = '2px 8px';
+        }
       }
     }
   }
 
-  for (const line of doc.querySelectorAll('.req-title-line, .requirementDiagram line')) {
+  // Divider lines
+  for (const line of doc.querySelectorAll('.req-title-line, .requirementDiagram line, .requirementDiagram g.divider path')) {
     line.setAttribute('stroke', palette.border);
     line.setAttribute('stroke-width', '1.5px');
   }
 
-  for (const text of doc.querySelectorAll('.requirementDiagram .nodeLabel text, .requirementDiagram .nodeLabel span, .reqTitle, .reqLabel, .reqText')) {
+  // Typography and labels
+  for (const text of doc.querySelectorAll('.requirementDiagram text, .requirementDiagram .nodeLabel text, .requirementDiagram .nodeLabel span, .requirementDiagram .nodeLabel p, .reqTitle, .reqLabel, .reqText')) {
     text.setAttribute('fill', palette.text);
     if ((text as HTMLElement).style) (text as HTMLElement).style.color = palette.text;
   }
 
+  // Relationship lines
+  for (const path of doc.querySelectorAll('.requirementDiagram .edgePaths path, .requirementDiagram path.relationshipLine')) {
+    path.setAttribute('stroke', palette.line);
+    path.setAttribute('stroke-width', '1.5px');
+  }
+
+  // Relationship badges/pills
   for (const labelBkg of doc.querySelectorAll('.requirementDiagram .labelBkg, .requirementDiagram .edgeLabels rect, .reqLabelBox')) {
     labelBkg.setAttribute('fill', palette.label);
     labelBkg.setAttribute('stroke', palette.border);
@@ -835,35 +863,446 @@ export function fixBlockDiagram(doc: Document, palette: PaletteData, _dark: bool
  */
 export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean): void {
   const root = doc.documentElement;
-  const isGantt = root.classList.contains('gantt') || !!doc.querySelector('.grid .tick, .taskText, .sectionTitle');
+  const isGantt = root.classList.contains('gantt') || !!doc.querySelector('.grid .tick, .taskText, .sectionTitle, rect.task');
   if (!isGantt) return;
 
-  // Active task text: light blue / light accent fill in dark mode requires dark text (#0f172a)
+  // Active task text: high contrast against accent fill
   const activeTextColor = dark ? '#0f172a' : '#ffffff';
   for (const text of doc.querySelectorAll('[class*="activeText"], .taskText.active, .task.active + text')) {
     text.setAttribute('fill', activeTextColor);
     if ((text as HTMLElement).style) {
-      (text as HTMLElement).style.color = activeTextColor;
-      (text as HTMLElement).style.fill = activeTextColor;
+      (text as HTMLElement).style.setProperty('fill', activeTextColor, 'important');
+      (text as HTMLElement).style.setProperty('color', activeTextColor, 'important');
     }
   }
 
-  // Section titles, diagram titles, task text outside bars, and date tick marks
-  for (const text of doc.querySelectorAll('.grid .tick text, g.tick text, .tick text, .sectionTitle, .titleText, .taskTextOutsideLeft, .taskTextOutsideRight, .taskTextOutside')) {
+  // Critical fix for dark mode: Mermaid injects CSS fill: #2c2c2c on taskTextOutsideLeft / Right!
+  // Force high contrast palette text with !important so text is crystal clear
+  for (const text of doc.querySelectorAll('.taskTextOutsideLeft, .taskTextOutsideRight, .taskTextOutside, [class*="taskTextOutside"], .sectionTitle, .titleText, .grid .tick text, g.tick text')) {
     text.setAttribute('fill', palette.text);
     if ((text as HTMLElement).style) {
-      (text as HTMLElement).style.color = palette.text;
-      (text as HTMLElement).style.fill = palette.text;
+      (text as HTMLElement).style.setProperty('fill', palette.text, 'important');
+      (text as HTMLElement).style.setProperty('color', palette.text, 'important');
     }
   }
 
-  // Milestone labels (e.g. Public Community Release) - offset slightly past the milestone diamond
-  for (const text of doc.querySelectorAll('.taskTextOutsideRight')) {
-    const x = parseFloat(text.getAttribute('x') || '0');
-    if (x > 0) {
-      text.setAttribute('x', String(x + 12));
+  // Section titles: bold, crisp
+  for (const title of doc.querySelectorAll('.sectionTitle')) {
+    title.setAttribute('fill', palette.text);
+    if ((title as HTMLElement).style) {
+      (title as HTMLElement).style.setProperty('fill', palette.text, 'important');
+      (title as HTMLElement).style.setProperty('color', palette.text, 'important');
+      (title as HTMLElement).style.fontWeight = '700';
     }
   }
+
+  // Task bars
+  for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
+    const cls = rect.getAttribute('class') || '';
+    if (cls.includes('done')) {
+      rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#222f3e' : '#e2e8f0'));
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('ry', '4');
+    } else if (cls.includes('active')) {
+      rect.setAttribute('fill', palette.accent);
+      rect.setAttribute('stroke', palette.accent);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('ry', '4');
+    } else if (!cls.includes('milestone')) {
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('ry', '4');
+    }
+  }
+
+  // Milestone diamond shapes and offset milestone label
+  for (const ms of doc.querySelectorAll('rect.milestone, polygon.milestone')) {
+    ms.setAttribute('fill', palette.accent);
+    ms.setAttribute('stroke', palette.accent);
+  }
+  for (const text of doc.querySelectorAll('.milestoneText, .taskTextOutsideRight')) {
+    const x = parseFloat(text.getAttribute('x') || '0');
+    if (x > 0) {
+      text.setAttribute('x', String(x + 14));
+    }
+    text.setAttribute('fill', palette.text);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.setProperty('fill', palette.text, 'important');
+      (text as HTMLElement).style.setProperty('color', palette.text, 'important');
+    }
+  }
+
+  // Grid lines
+  for (const line of doc.querySelectorAll('.grid line, line.tick')) {
+    line.setAttribute('stroke', palette.border);
+    line.setAttribute('stroke-opacity', '0.45');
+  }
+
+  // Alternating section background bands
+  for (const sec of doc.querySelectorAll('.section0, .section1, .section2, .section3')) {
+    sec.setAttribute('fill', palette.clusterBkg ?? (dark ? '#182230' : '#f8fafc'));
+    sec.setAttribute('fill-opacity', '0.35');
+  }
+}
+
+/**
+ * Enhances Class Diagrams with clean container fills, divider lines, member padding,
+ * and high-contrast typography.
+ */
+export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: boolean): void {
+  const root = doc.documentElement;
+  const isClass = root.classList.contains('classDiagram') ||
+    root.getAttribute('aria-roledescription') === 'classDiagram' ||
+    !!doc.querySelector('.classDiagram, g.classGroup, .classTitle, .classLabel, [id*="classId"]');
+  if (!isClass) return;
+
+  // Class box containers (rects and path-based outer-paths)
+  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
+    for (const rect of node.querySelectorAll(':scope > rect, rect.basic, g.classGroup > rect')) {
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '6');
+      rect.setAttribute('ry', '6');
+    }
+
+    for (const path of node.querySelectorAll('g.outer-path path, g.basic path, path.basic')) {
+      const currentFill = path.getAttribute('fill');
+      const currentStroke = path.getAttribute('stroke');
+      if (currentStroke && currentStroke !== 'none' && currentStroke !== 'transparent') {
+        path.setAttribute('stroke', palette.border);
+        path.setAttribute('stroke-width', '1.5px');
+      } else if (currentFill && currentFill !== 'none') {
+        path.setAttribute('fill', palette.surface);
+      }
+    }
+
+    // Class title
+    for (const title of node.querySelectorAll('.label-group text, .classTitle, text.title, .label-group .nodeLabel, .label-group p')) {
+      title.setAttribute('fill', palette.text);
+      if ((title as HTMLElement).style) {
+        (title as HTMLElement).style.color = palette.text;
+        (title as HTMLElement).style.fontWeight = '700';
+      }
+    }
+
+    // Members & Methods: ensure clean left padding so text never touches or overlaps the left border
+    for (const group of node.querySelectorAll('.members-group, .methods-group')) {
+      for (const foDiv of group.querySelectorAll('foreignObject div, .nodeLabel')) {
+        const divEl = foDiv as HTMLElement;
+        if (divEl.style) {
+          divEl.style.textAlign = 'left';
+          divEl.style.paddingLeft = '10px';
+          divEl.style.paddingRight = '10px';
+          divEl.style.color = palette.text;
+          divEl.style.whiteSpace = 'nowrap';
+        }
+      }
+      for (const text of group.querySelectorAll('text')) {
+        text.setAttribute('fill', palette.text);
+        text.setAttribute('text-anchor', 'start');
+      }
+    }
+  }
+
+  // Dividers
+  for (const divider of doc.querySelectorAll('.classDiagram g.divider path, g.classGroup line, line.divider')) {
+    divider.setAttribute('stroke', palette.border);
+    divider.setAttribute('stroke-width', '1.2px');
+  }
+
+  // All remaining text in classDiagram
+  for (const text of doc.querySelectorAll('.classDiagram text:not(.classLabel text), g.classGroup text')) {
+    text.setAttribute('fill', palette.text);
+    if ((text as HTMLElement).style) (text as HTMLElement).style.color = palette.text;
+  }
+
+  // Relationship lines & markers
+  for (const path of doc.querySelectorAll('.classDiagram .edgePaths path, path.relation')) {
+    path.setAttribute('stroke', palette.line);
+    path.setAttribute('stroke-width', '1.5px');
+  }
+  for (const marker of doc.querySelectorAll('.classDiagram marker path, marker[id*="extension"] path, marker[id*="composition"] path, marker[id*="aggregation"] path, marker[id*="dependency"] path')) {
+    marker.setAttribute('stroke', palette.line);
+    marker.setAttribute('fill', palette.surface);
+  }
+
+  // Relationship labels
+  for (const labelBox of doc.querySelectorAll('.classDiagram .classLabel .box, .classDiagram .edgeLabels rect')) {
+    labelBox.setAttribute('fill', palette.label);
+    labelBox.setAttribute('stroke', palette.border);
+    labelBox.setAttribute('rx', '4');
+    labelBox.setAttribute('ry', '4');
+  }
+  for (const labelText of doc.querySelectorAll('.classDiagram .classLabel .label, .classDiagram .edgeLabels text, .classDiagram .edgeLabels p')) {
+    labelText.setAttribute('fill', palette.text);
+    if ((labelText as HTMLElement).style) (labelText as HTMLElement).style.color = palette.text;
+  }
+}
+
+/**
+ * Enhances Entity Relationship (ER) diagrams with clean container fills, alternating row bands,
+ * attribute text padding, PK/FK styling, and cardinality markers.
+ */
+export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isEr = root.classList.contains('erDiagram') ||
+    root.getAttribute('aria-roledescription') === 'er' ||
+    !!doc.querySelector('.erDiagram, .entityBox, .relationshipLine, [id*="entity-"]');
+  if (!isEr) return;
+  root.classList.add('erDiagram');
+
+  // Outer entity container boxes
+  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
+    for (const rect of node.querySelectorAll(':scope > rect.entityBox, rect.basic')) {
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '6');
+      rect.setAttribute('ry', '6');
+    }
+
+    for (const path of node.querySelectorAll('g.outer-path path')) {
+      const currentFill = path.getAttribute('fill');
+      const currentStroke = path.getAttribute('stroke');
+      if (currentStroke && currentStroke !== 'none' && currentStroke !== 'transparent') {
+        path.setAttribute('stroke', palette.border);
+        path.setAttribute('stroke-width', '1.5px');
+      } else if (currentFill && currentFill !== 'none') {
+        path.setAttribute('fill', palette.surface);
+      }
+    }
+  }
+
+  // Alternating row rects
+  for (const path of doc.querySelectorAll('g.row-rect-odd path, rect.er.attributeBoxOdd')) {
+    const stroke = path.getAttribute('stroke');
+    if (stroke && stroke !== 'none') path.setAttribute('stroke', palette.border);
+    else path.setAttribute('fill', palette.surface);
+  }
+  for (const path of doc.querySelectorAll('g.row-rect-even path, rect.er.attributeBoxEven')) {
+    const stroke = path.getAttribute('stroke');
+    if (stroke && stroke !== 'none') path.setAttribute('stroke', palette.border);
+    else path.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9'));
+  }
+
+  // Dividers
+  for (const divider of doc.querySelectorAll('g.divider path, line.divider')) {
+    divider.setAttribute('stroke', palette.border);
+    divider.setAttribute('stroke-width', '1px');
+  }
+
+  // Entity title
+  for (const title of doc.querySelectorAll('g.label.name, text.entityLabel, .name .nodeLabel, .name p')) {
+    title.setAttribute('fill', palette.text);
+    if ((title as HTMLElement).style) {
+      (title as HTMLElement).style.color = palette.text;
+      (title as HTMLElement).style.fontWeight = '700';
+    }
+  }
+
+  // Attributes: ensure clean horizontal padding and high contrast
+  for (const attr of doc.querySelectorAll('.attribute-type, .attribute-name, .attribute-keys, .attribute-comment, text.er.entityText')) {
+    for (const foDiv of attr.querySelectorAll('foreignObject div, .nodeLabel')) {
+      const divEl = foDiv as HTMLElement;
+      if (divEl.style) {
+        divEl.style.paddingLeft = '8px';
+        divEl.style.paddingRight = '8px';
+        divEl.style.color = palette.text;
+      }
+    }
+    for (const text of attr.querySelectorAll('text')) {
+      text.setAttribute('fill', palette.text);
+    }
+  }
+
+  // Key badges (PK, FK)
+  for (const key of doc.querySelectorAll('.attribute-keys foreignObject div, .attribute-keys .nodeLabel, .attribute-keys p, .attribute-keys span, .attribute-keys text')) {
+    const text = (key.textContent || '').trim();
+    if (!text) continue;
+    key.setAttribute('fill', palette.accent);
+    if ((key as HTMLElement).style) {
+      (key as HTMLElement).style.color = palette.accent;
+      (key as HTMLElement).style.fontWeight = '700';
+    }
+  }
+
+  // Relationship lines & markers
+  for (const path of doc.querySelectorAll('path.relationshipLine, .edgePaths path')) {
+    path.setAttribute('stroke', palette.line);
+    path.setAttribute('stroke-width', '1.5px');
+  }
+  for (const marker of doc.querySelectorAll('marker[class*="er"] path, marker[class*="er"] circle, marker.onlyOne path, marker.zeroOrOne path, marker.zeroOrOne circle, marker.oneOrMore path, marker.zeroOrMore path, marker.zeroOrMore circle')) {
+    marker.setAttribute('stroke', palette.line);
+    marker.setAttribute('fill', palette.surface);
+  }
+
+  // Relationship labels
+  for (const labelBox of doc.querySelectorAll('.edgeLabels rect, .labelBkg')) {
+    labelBox.setAttribute('fill', palette.label);
+    labelBox.setAttribute('stroke', palette.border);
+    labelBox.setAttribute('rx', '4');
+    labelBox.setAttribute('ry', '4');
+  }
+  for (const labelText of doc.querySelectorAll('.edgeLabels text, .edgeLabels p')) {
+    labelText.setAttribute('fill', palette.text);
+    if ((labelText as HTMLElement).style) (labelText as HTMLElement).style.color = palette.text;
+  }
+}
+
+/**
+ * Enhances Kanban boards with cohesive column containers, card surfaces, and card text word wrapping.
+ */
+export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isKanban = root.getAttribute('aria-roledescription') === 'kanban' ||
+    !!doc.querySelector('g.cluster.section-1, g.kanban-section, .kanban-column, .kanban-item, [class*="kanban"]');
+  if (!isKanban) return;
+
+  // Kanban column backgrounds
+  for (const col of doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section')) {
+    const rect = col.querySelector(':scope > rect, rect') as SVGRectElement | null;
+    if (rect) {
+      rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('rx', '8');
+      rect.setAttribute('ry', '8');
+    }
+
+    // Column header labels
+    for (const title of col.querySelectorAll('.cluster-label, .kanban-label, .cluster-label .nodeLabel, .cluster-label p, .cluster-label span')) {
+      title.setAttribute('fill', palette.text);
+      if ((title as HTMLElement).style) {
+        (title as HTMLElement).style.setProperty('color', palette.text, 'important');
+        (title as HTMLElement).style.setProperty('fill', palette.text, 'important');
+        (title as HTMLElement).style.fontWeight = '700';
+        (title as HTMLElement).style.fontSize = '14px';
+      }
+    }
+  }
+
+  // Kanban card nodes
+  for (const node of doc.querySelectorAll('.kanban-item, .kanban-ticket, g.items g.node, g.node[id*="task"]')) {
+    const cardRect = node.querySelector('rect.basic, rect') as SVGRectElement | null;
+    if (cardRect) {
+      cardRect.setAttribute('fill', palette.surface);
+      cardRect.setAttribute('stroke', palette.border);
+      cardRect.setAttribute('stroke-width', '1.2px');
+      cardRect.setAttribute('rx', '6');
+      cardRect.setAttribute('ry', '6');
+    }
+
+    // Card text word-wrap: critical fix! Mermaid's hardcoded white-space: nowrap causes card text to spill into adjacent columns.
+    for (const foDiv of node.querySelectorAll('foreignObject div, .nodeLabel, p, span')) {
+      const divEl = foDiv as HTMLElement;
+      if (divEl.style) {
+        divEl.style.whiteSpace = 'normal';
+        divEl.style.wordBreak = 'break-word';
+        divEl.style.textAlign = 'left';
+        divEl.style.padding = '4px 8px';
+        divEl.style.color = palette.text;
+        divEl.style.fontSize = '12.5px';
+        divEl.style.lineHeight = '1.4';
+      }
+    }
+    for (const text of node.querySelectorAll('text')) {
+      text.setAttribute('fill', palette.text);
+    }
+  }
+}
+
+/**
+ * Enhances Treemap diagrams with clean section headers, coordinated palette fills for leaf nodes,
+ * crisp borders, and distinct label/value positioning.
+ */
+export function fixTreemapDiagram(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isTreemap = root.getAttribute('aria-roledescription') === 'treemap' ||
+    !!doc.querySelector('.treemapContainer, g.treemapSection, rect.treemapLeaf');
+  if (!isTreemap) return;
+
+  // Section headers
+  for (const section of doc.querySelectorAll('g.treemapSection')) {
+    const headerRect = section.querySelector('rect.treemapSectionHeader') as SVGRectElement | null;
+    if (headerRect) {
+      headerRect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
+      headerRect.setAttribute('stroke', palette.border);
+      headerRect.setAttribute('stroke-width', '1px');
+      headerRect.setAttribute('rx', '4');
+      headerRect.setAttribute('ry', '4');
+    }
+
+    const secRect = section.querySelector('rect.treemapSection:not(.section0)') as SVGRectElement | null;
+    if (secRect) {
+      secRect.setAttribute('stroke', palette.border);
+      secRect.setAttribute('stroke-width', '1.5px');
+      secRect.setAttribute('rx', '6');
+      secRect.setAttribute('ry', '6');
+    }
+
+    const secLabel = section.querySelector('text.treemapSectionLabel') as SVGTextElement | null;
+    if (secLabel) {
+      secLabel.setAttribute('fill', palette.text);
+      secLabel.setAttribute('font-weight', '700');
+      secLabel.setAttribute('font-size', '13px');
+      const sy = parseFloat(secLabel.getAttribute('y') || '0');
+      if (sy < 15) secLabel.setAttribute('y', '15');
+    }
+
+    const secValue = section.querySelector('text.treemapSectionValue') as SVGTextElement | null;
+    if (secValue) {
+      secValue.setAttribute('fill', palette.accent);
+      secValue.setAttribute('font-weight', '600');
+      secValue.setAttribute('font-size', '12px');
+      const vy = parseFloat(secValue.getAttribute('y') || '0');
+      if (vy < 15) secValue.setAttribute('y', '15');
+    }
+  }
+
+  // Leaf nodes: coordinated palette fills, borders, and clear typography
+  const leafNodes = Array.from(doc.querySelectorAll('g.treemapNode, g.treemapLeafGroup'));
+  leafNodes.forEach((leaf, idx) => {
+    const fill = palette.fills[idx % palette.fills.length] ?? palette.surface;
+    const textColor = palette.textOnFills[idx % palette.fills.length] ?? palette.text;
+
+    const leafRect = leaf.querySelector('rect.treemapLeaf, rect') as SVGRectElement | null;
+    if (leafRect) {
+      leafRect.setAttribute('fill', fill);
+      leafRect.setAttribute('stroke', palette.border);
+      leafRect.setAttribute('stroke-width', '1.2px');
+      leafRect.setAttribute('rx', '5');
+      leafRect.setAttribute('ry', '5');
+    }
+
+    const label = leaf.querySelector('text.treemapLabel') as SVGTextElement | null;
+    const value = leaf.querySelector('text.treemapValue') as SVGTextElement | null;
+
+    if (label) {
+      label.setAttribute('fill', textColor);
+      label.setAttribute('font-weight', '600');
+      label.setAttribute('font-size', '12px');
+    }
+
+    if (value) {
+      value.setAttribute('fill', textColor);
+      value.setAttribute('opacity', '0.88');
+      value.setAttribute('font-size', '11px');
+
+      if (label) {
+        const ly = parseFloat(label.getAttribute('y') || '0');
+        const vy = parseFloat(value.getAttribute('y') || '0');
+        if (Math.abs(vy - ly) < 14) {
+          value.setAttribute('y', String(ly + 16));
+        }
+      }
+    }
+  });
 }
 
 export function styleSvg(
@@ -1344,15 +1783,6 @@ export function styleSvg(
   // Resolve C4 architecture relationship label overlaps and add clean badge pills
   fixC4RelationshipCollisions(doc, palette);
 
-  // Enhance Requirement diagram styles, container fills, and contrast
-  fixRequirementDiagram(doc, palette, dark);
-
-  // Enhance Block diagram text readability and contrast
-  fixBlockDiagram(doc, palette, dark);
-
-  // Enhance Gantt chart active task and axis date tick text contrast
-  fixGanttChart(doc, palette, dark);
-
   // Expand viewBox if outer return lanes or routes extend past original dimensions
   const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
   if (routeExtent.length && viewBox.length === 4 && viewBox.every(Number.isFinite)) {
@@ -1414,6 +1844,15 @@ export function styleSvg(
       }
     }
   }
+
+  // Specialized diagram type cosmetic styling
+  fixRequirementDiagram(doc, palette, dark);
+  fixBlockDiagram(doc, palette, dark);
+  fixGanttChart(doc, palette, dark);
+  fixClassDiagram(doc, palette, dark);
+  fixEntityRelationshipDiagram(doc, palette, dark);
+  fixKanbanDiagram(doc, palette, dark);
+  fixTreemapDiagram(doc, palette, dark);
 
   // Mark SVG as enhanced and set custom properties
   root.classList?.add?.('mfe-enhanced', 'mermaid-genie-diagram');

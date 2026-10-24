@@ -299,14 +299,14 @@ requirementDiagram
         id: 101
         text: Render diagrams under 100ms
         risk: medium
-        verifymethod: benchmark
+        verifymethod: test
     }
 
     functionalRequirement Req_Accessibility {
         id: 102
         text: Maintain WCAG AA 4.5 contrast
         risk: low
-        verifymethod: automated_test
+        verifymethod: test
     }
 
     element Engine {

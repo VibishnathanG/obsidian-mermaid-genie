@@ -850,6 +850,23 @@ export function adaptDiagramSource(source: string): TranspileResult {
     };
   }
 
+  // SysML Requirement Diagram: auto-sanitize non-standard verifymethod tokens (e.g. benchmark, automated_test)
+  // Mermaid and Pele SysML parsers strictly require: analysis | demonstration | inspection | test
+  if (/^requirementDiagram\b/i.test(trimmed)) {
+    const sanitized = source.replace(/(verifymethod\s*:\s*)([^\s\n}]+)/gi, (match, prefix, method) => {
+      const clean = method.trim();
+      const valid = /^(?:analysis|demonstration|inspection|test)$/i.test(clean);
+      return valid ? match : `${prefix}test`;
+    });
+    if (sanitized !== source) {
+      return {
+        code: sanitized,
+        transpiled: true,
+        type: 'requirement',
+      };
+    }
+  }
+
   return {
     code: source,
     transpiled: false,
