@@ -18,6 +18,7 @@ import { DiagramExportControls, DiagramPickerModal, decorateMermaidBlock, export
 import { createPathController } from './highlight';
 import { computeDiagramSpacing, styleSvg, widenSingleRectangles, wrapDecisions, type Direction } from './layout';
 import { DEFAULT_SETTINGS, GenieSettingsTab, normalizeSettings, type GenieSettings } from './settings';
+import { renderWithPele } from './pele-engine';
 import { SvgClipboard } from './svg-clipboard';
 import { adaptDiagramSource } from './transpiler';
 import { teardownInlineZoom } from './zoom-fullscreen';
@@ -141,7 +142,7 @@ export default class MermaidGeniePlugin extends Plugin {
       const dark = document.body.classList.contains('theme-dark');
 
       // Check in-memory render cache for immediate zero-latency load
-      const cacheKey = `${dark ? '1' : '0'}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
+      const cacheKey = `${currentSettings.renderEngine}|${dark ? '1' : '0'}|${currentSettings.colorStyle}|${currentSettings.multiPalette}|${currentSettings.singlePalette}|${text}`;
       const cached = cache.get(cacheKey);
       if (cached) {
         // True LRU: refresh entry order in Map
@@ -169,6 +170,31 @@ export default class MermaidGeniePlugin extends Plugin {
         currentSettings.customColors?.[dark ? 'dark' : 'light']
       );
 
+      // Primary Ultra-Fast Engine: Pele (Obsidian's official zero-dependency compiler)
+      if (currentSettings.renderEngine === 'pele') {
+        try {
+          const peleSvg = renderWithPele({
+            text,
+            id,
+            settings: currentSettings,
+            palette,
+            dark,
+          });
+
+          if (peleSvg) {
+            if (cache.size >= maxCache) {
+              const oldestKey = cache.keys().next().value;
+              if (oldestKey) cache.delete(oldestKey);
+            }
+            cache.set(cacheKey, { svg: peleSvg, raw: peleSvg });
+            return peleSvg;
+          }
+        } catch (peleErr) {
+          console.debug('Mermaid Genie: Pele compile error, falling back to Mermaid.js:', peleErr);
+        }
+      }
+
+      // Resilient Fallback: Classic Mermaid.js
       // Smart label wrapping on decision diamonds
       if (direction && currentSettings.compactLayout) {
         text = wrapDecisions(text);

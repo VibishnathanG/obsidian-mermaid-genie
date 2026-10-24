@@ -121,6 +121,7 @@
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .nodeLabel,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .edgeLabel,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-label,
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .label {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif !important;
   -webkit-font-smoothing: antialiased;
@@ -153,7 +154,8 @@
   line-height: 1.35 !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node text,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .pele-label {
   fill: var(--node-text, var(--mpe-text));
   text-anchor: middle !important;
 }
@@ -169,7 +171,7 @@
 }
 
 /* --- Connectors & Edges --- */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.flowchart-link, .edgePath .path) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.flowchart-link, .edgePath .path, .pele-edge path) {
   stroke: var(--mpe-line);
   stroke-width: 1.53px;
   stroke-linecap: round;
@@ -181,7 +183,8 @@
   overflow: visible !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) marker :is(path, polygon),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-marker {
   fill: var(--mpe-line) !important;
   stroke: var(--mpe-line) !important;
   stroke-width: 0 !important;

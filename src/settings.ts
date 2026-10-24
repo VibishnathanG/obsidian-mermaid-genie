@@ -1,7 +1,10 @@
 import { App, PluginSettingTab, Setting, type Plugin } from 'obsidian';
 import type { ColorStyle, MulticolorPaletteName, SinglePaletteName, ThemeColors } from './colors';
 
+export type RenderEngine = 'pele' | 'mermaid';
+
 export interface GenieSettings {
+  renderEngine: RenderEngine;
   compactLayout: boolean;
   pathHighlight: boolean;
   animationDuration: number;
@@ -27,6 +30,7 @@ export interface SettingsOwner extends Plugin {
 }
 
 export const DEFAULT_SETTINGS: Readonly<GenieSettings> = Object.freeze({
+  renderEngine: 'pele',
   compactLayout: true,
   pathHighlight: true,
   animationDuration: 450,
@@ -53,6 +57,11 @@ export function normalizeSettings(value: unknown = {}): GenieSettings {
       : fallback;
   };
 
+  const engineCandidate = input.renderEngine;
+  const renderEngine: RenderEngine = (engineCandidate === 'pele' || engineCandidate === 'mermaid')
+    ? engineCandidate
+    : DEFAULT_SETTINGS.renderEngine;
+
   const styleCandidate = input.colorStyle;
   const colorStyle: ColorStyle = (styleCandidate === 'multi' || styleCandidate === 'single' || styleCandidate === 'custom')
     ? styleCandidate
@@ -69,6 +78,7 @@ export function normalizeSettings(value: unknown = {}): GenieSettings {
     : DEFAULT_SETTINGS.singlePalette;
 
   const result: GenieSettings = {
+    renderEngine,
     compactLayout: typeof input.compactLayout === 'boolean' ? input.compactLayout : DEFAULT_SETTINGS.compactLayout,
     pathHighlight: typeof input.pathHighlight === 'boolean' ? input.pathHighlight : DEFAULT_SETTINGS.pathHighlight,
     animationDuration: finite('animationDuration', 0, 2000, DEFAULT_SETTINGS.animationDuration),
@@ -118,6 +128,22 @@ export class GenieSettingsTab extends PluginSettingTab {
     info.appendText(' • ');
     const repoLink = info.createEl('a', { text: 'GitHub Repository & Documentation', href: 'https://github.com/VibishnathanG/obsidian-mermaid-genie' });
     repoLink.style.color = 'var(--text-accent)';
+
+    // --- Rendering Engine ---
+    containerEl.createEl('h3', { text: 'Rendering Engine' });
+
+    new Setting(containerEl)
+      .setName('Mermaid compiler')
+      .setDesc('Pele is Obsidian\'s official zero-dependency compiler (up to 500x faster, renders synchronously in <1ms). Mermaid.js is the classic legacy engine.')
+      .addDropdown(dropdown => dropdown
+        .addOption('pele', 'Pele (Ultra-fast, Recommended)')
+        .addOption('mermaid', 'Mermaid.js (Classic)')
+        .setValue(this.plugin.settings.renderEngine)
+        .onChange(async (value: string) => {
+          this.plugin.settings.renderEngine = value as RenderEngine;
+          await this.plugin.saveSettings();
+          this.plugin.refreshDiagrams();
+        }));
 
     // --- Layout & Architecture ---
     containerEl.createEl('h3', { text: 'Flowchart Layout & Routing' });
