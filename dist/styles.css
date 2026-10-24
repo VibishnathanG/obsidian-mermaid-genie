@@ -1,7 +1,8 @@
 /* Mermaid Genie: Enhanced Flowcharts with Coordinated Color Blocks, Aligned Branches, Path Highlighting & Crisp Typography */
 
 /* Reset Obsidian's dark-mode filter so colors and text never invert or blur */
-.mermaid:has(svg.mfe-enhanced) {
+.mermaid:has(svg.mfe-enhanced),
+.mermaid.mermaid-genie-container {
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
@@ -9,6 +10,7 @@
   overflow-y: hidden !important;
   padding: 8px 0 !important;
   margin: 1rem auto !important;
+  contain: layout style;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style),
@@ -515,14 +517,13 @@
 
 /* --- Smooth Ancestor Path Highlighting --- */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel) {
-  transition: opacity var(--mpe-duration, 450ms) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--mpe-duration, 180ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node :is(rect, polygon, circle, ellipse),
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .flowchart-link {
-  transition: opacity var(--mpe-duration, 450ms) cubic-bezier(0.4, 0, 0.2, 1),
-              stroke var(--mpe-duration, 450ms) cubic-bezier(0.4, 0, 0.2, 1),
-              stroke-width var(--mpe-duration, 450ms) cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--mpe-duration, 180ms) cubic-bezier(0.4, 0, 0.2, 1),
+              stroke var(--mpe-duration, 180ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style).mpe-tracing :where(.node, .flowchart-link, .edgePath, .edgeLabels > .edgeLabel) {
@@ -560,10 +561,16 @@
   }
 }
 
-/* --- Export Actions Container & Button --- */
+/* --- Diagram Controls & Action Toolbar --- */
+.mermaid,
+.mermaid:has(svg),
 .mermaid.mermaid-genie-container {
-  --genie-btn-size: 28px;
-  position: relative;
+  position: relative !important;
+}
+
+.mermaid.mermaid-genie-container {
+  --genie-btn-size: 26px;
+  position: relative !important;
   overflow-x: auto;
   min-height: calc(var(--genie-btn-size) + 16px);
 }
@@ -571,12 +578,25 @@
 .mermaid-genie-actions {
   position: absolute;
   bottom: 8px;
-  left: 8px;
+  right: 8px;
   z-index: 100;
   display: flex;
-  transform: translateX(var(--mermaid-genie-scroll-offset, 0px));
+  align-items: center;
+  gap: 2px;
+  background: var(--background-primary, #ffffff);
+  border: 1px solid var(--background-modifier-border, rgba(148, 163, 184, 0.2));
+  border-radius: 6px;
+  padding: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
 }
 
+.mermaid-genie-actions:hover {
+  opacity: 1;
+}
+
+.mermaid-genie-actions > .mermaid-genie-btn,
 .mermaid-genie-actions > .mermaid-genie-export-btn {
   display: inline-flex;
   align-items: center;
@@ -587,37 +607,184 @@
   min-width: var(--genie-btn-size);
   min-height: var(--genie-btn-size);
   padding: 4px;
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--text-muted);
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: transparent;
+  border: none;
   cursor: pointer;
-  opacity: 0.75;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
-.mermaid-genie-actions > .mermaid-genie-export-btn:is(:hover, :focus) {
+.mermaid-genie-actions > :is(.mermaid-genie-btn, .mermaid-genie-export-btn):is(:hover, :focus) {
   color: var(--text-normal);
-  background: var(--background-secondary);
-  opacity: 1;
+  background: var(--background-modifier-hover);
 }
 
-.mermaid-genie-actions > .mermaid-genie-export-btn:focus-visible {
+.mermaid-genie-actions > :is(.mermaid-genie-btn, .mermaid-genie-export-btn):focus-visible {
   outline: 2px solid var(--interactive-accent);
-  outline-offset: 2px;
-  opacity: 1;
+  outline-offset: 1px;
 }
 
-.mermaid-genie-actions > .mermaid-genie-export-btn svg {
+.mermaid-genie-actions > :is(.mermaid-genie-btn, .mermaid-genie-export-btn) svg {
   width: 16px;
   height: 16px;
   flex: none;
 }
 
+/* Scaled inline diagram scrolling and dragging */
+.mermaid.mermaid-genie-scaled {
+  display: block !important;
+  overflow-x: auto !important;
+  scrollbar-width: thin;
+}
+
+.mermaid.mermaid-genie-scaled > svg.mfe-enhanced {
+  margin-inline: auto !important;
+  display: block !important;
+}
+
+.mermaid.mermaid-genie-scaled {
+  cursor: grab;
+}
+
+.mermaid.mermaid-genie-dragging {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.mermaid.mermaid-genie-dragging > svg.mfe-enhanced {
+  cursor: grabbing !important;
+}
+
+/* --- Fullscreen Modal Overlay & Controls --- */
+.mermaid-genie-fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  background: var(--background-primary);
+  z-index: var(--layer-modal, 9999);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.mermaid-genie-modal-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.mermaid-genie-modal-zoom-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+}
+
+.mermaid-genie-modal-wrapper.mermaid {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  position: absolute !important;
+  transform-origin: 0 0 !important;
+  width: fit-content;
+}
+
+.mermaid-genie-modal-wrapper.is-dragging {
+  cursor: grabbing !important;
+}
+
+.mermaid-genie-modal-wrapper svg {
+  display: block !important;
+  max-width: none !important;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+}
+
+.mermaid-genie-modal-wrapper svg :is(.flowchart-link, path.path, path.transition) {
+  vector-effect: non-scaling-stroke;
+}
+
+.mermaid-genie-modal-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border-radius: 5px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-btn:is(:hover, :focus) {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-btn:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-btn.mermaid-genie-modal-close-btn:hover {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.mermaid-genie-modal-controls > .mermaid-genie-scale-indicator {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-family: var(--font-ui-medium);
+  color: var(--text-muted);
+  user-select: none;
+}
+
 @media (hover: none), (pointer: coarse) {
   .mermaid.mermaid-genie-container {
-    --genie-btn-size: 40px;
+    --genie-btn-size: 38px;
+  }
+  .mermaid-genie-modal-controls > .mermaid-genie-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
   }
 }
 

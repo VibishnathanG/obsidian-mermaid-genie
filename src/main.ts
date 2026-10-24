@@ -14,12 +14,13 @@ export interface MermaidConfig {
 }
 import { resolvePaletteData } from './colors';
 import { DiagramFileExport } from './file-export';
-import { DiagramExportControls, DiagramPickerModal, exportDiagram } from './export-controls';
+import { DiagramExportControls, DiagramPickerModal, decorateMermaidBlock, exportDiagram } from './export-controls';
 import { createPathController } from './highlight';
 import { computeDiagramSpacing, styleSvg, widenSingleRectangles, wrapDecisions, type Direction } from './layout';
 import { DEFAULT_SETTINGS, GenieSettingsTab, normalizeSettings, type GenieSettings } from './settings';
 import { SvgClipboard } from './svg-clipboard';
 import { adaptDiagramSource } from './transpiler';
+import { teardownInlineZoom } from './zoom-fullscreen';
 
 type MermaidRender = (this: unknown, id: string, source: unknown, ...args: unknown[]) => Promise<string | RenderResult>;
 interface MermaidRuntime {
@@ -31,7 +32,7 @@ export default class MermaidGeniePlugin extends Plugin {
   settings: GenieSettings = { ...DEFAULT_SETTINGS };
   private svgClipboard = new SvgClipboard(this.app);
   private renderCache = new Map<string, { svg: string; raw: string | RenderResult }>();
-  private maxCacheSize = 150;
+  private maxCacheSize = 10000;
   private fileExport = new DiagramFileExport(
     this.app,
     () => this.settings.exportFolder,
@@ -40,6 +41,9 @@ export default class MermaidGeniePlugin extends Plugin {
       await this.saveSettings();
     }
   );
+  private mutationObserver?: MutationObserver;
+  private pendingMutationNodes: Set<HTMLElement> = new Set();
+  private mutationRaf: number | null = null;
 
   async onload(): Promise<void> {
     this.stopped = false;
@@ -56,20 +60,37 @@ export default class MermaidGeniePlugin extends Plugin {
     this.registerDomEvent(document, 'focusout', event => controller.leave(event));
     this.register(() => controller.dispose());
 
-    // Markdown post-processor for export action button
+    // Live Preview & dynamic DOM mutation observer
+    this.setupMutationObserver();
+
+    // Workspace sweep on initial layout ready and navigation
+    this.app.workspace.onLayoutReady(() => {
+      this.scheduleDecorateAll();
+    });
+
+    this.registerEvent(this.app.workspace.on('layout-change', () => {
+      this.scheduleDecorateAll();
+    }));
+
+    this.registerEvent(this.app.workspace.on('active-leaf-change', () => {
+      this.scheduleDecorateAll();
+    }));
+
+    this.registerEvent(this.app.workspace.on('file-open', async file => {
+      this.scheduleDecorateAll();
+      if (!file || file.extension !== 'md') return;
+      try {
+        const content = await this.app.vault.cachedRead(file);
+        void this.prewarmDiagramsInText(content);
+      } catch (err) {
+        console.debug('Mermaid Genie prewarm error:', err);
+      }
+    }));
+
+    // Markdown post-processor for reading view & embeds
     this.registerMarkdownPostProcessor((element, context) => {
       if (this.stopped || !this.settings.exportControls) return;
-      if (!element.matches('.mermaid, .mermaid-wrapper') && !element.querySelector('.mermaid, .mermaid-wrapper, code.language-mermaid')) {
-        return;
-      }
-      const controls = new DiagramExportControls(
-        element,
-        context.sourcePath,
-        this.svgClipboard,
-        this.fileExport,
-        () => this.settings.exportControls
-      );
-      context.addChild(controls);
+      this.decorateMermaidBlocksIn(element, context.sourcePath);
     });
 
     // Paste handler for SVG diagrams copied from Genie
@@ -447,7 +468,7 @@ export default class MermaidGeniePlugin extends Plugin {
         name: item.name,
         checkCallback: checking => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          const diagrams = Array.from(view?.containerEl.querySelectorAll<SVGSVGElement>('.mermaid > svg.mfe-enhanced') ?? []);
+          const diagrams = Array.from(view?.containerEl.querySelectorAll<SVGSVGElement>('.mermaid > svg') ?? []);
           if (!diagrams.length) return false;
 
           if (!checking) {
@@ -467,9 +488,131 @@ export default class MermaidGeniePlugin extends Plugin {
     }
   }
 
+  private scheduleDecorateAll(): void {
+    if (this.stopped || !this.settings.exportControls) return;
+    if (this.mutationRaf !== null) return;
+    this.mutationRaf = requestAnimationFrame(() => {
+      this.mutationRaf = null;
+      this.decorateAllMermaidBlocks();
+    });
+  }
+
+  decorateAllMermaidBlocks(): void {
+    if (this.stopped || !this.settings.exportControls) return;
+    const blocks = document.querySelectorAll<HTMLElement>('.mermaid');
+    for (const block of Array.from(blocks)) {
+      decorateMermaidBlock(block, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls);
+    }
+  }
+
+  decorateMermaidBlocksIn(root: HTMLElement, sourcePath = ''): void {
+    if (this.stopped || !this.settings.exportControls) return;
+    const blocks: HTMLElement[] = [];
+    if (root.classList?.contains('mermaid')) {
+      blocks.push(root);
+    } else {
+      for (const block of Array.from(root.querySelectorAll<HTMLElement>('.mermaid'))) {
+        blocks.push(block);
+      }
+      const host = root.closest?.('.mermaid') as HTMLElement | null;
+      if (host && !blocks.includes(host)) blocks.push(host);
+    }
+    for (const block of blocks) {
+      decorateMermaidBlock(block, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls, sourcePath);
+    }
+  }
+
+  private async prewarmDiagramsInText(text: string): Promise<void> {
+    const mermaidRegex = /```(?:mermaid)\r?\n([\s\S]*?)```/g;
+    let match: RegExpExecArray | null;
+    const sources: string[] = [];
+    while ((match = mermaidRegex.exec(text)) !== null) {
+      const code = match[1]?.trim();
+      if (code && !/^\s*%%\s*(?:mg|mfe):off\s*$/m.test(code)) {
+        sources.push(code);
+      }
+    }
+    if (!sources.length) return;
+
+    const mermaid = (await loadMermaid()) as MermaidRuntime;
+    if (this.stopped || !mermaid?.render) return;
+
+    for (let i = 0; i < sources.length; i++) {
+      if (this.stopped) break;
+      const source = sources[i];
+      const tempId = `mermaid-prewarm-${Date.now()}-${i}`;
+      try {
+        await mermaid.render(tempId, source);
+      } catch {
+        // Silently ignore during background prewarm
+      }
+      // Yield to main thread so UI remains buttery smooth
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+
+  private setupMutationObserver(): void {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+
+    this.mutationObserver = new MutationObserver(mutations => {
+      let hasRelevant = false;
+      for (const mutation of Array.from(mutations)) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            // Fast skip common CodeMirror virtualized lines and gutter elements during note scrolling
+            if (node.classList?.contains('cm-line') || node.classList?.contains('cm-gutterElement') || node.classList?.contains('cm-cursor')) {
+              continue;
+            }
+
+            // Ignore any mutations occurring inside our own actions or modal
+            if (node.classList?.contains('mermaid-genie-actions') || node.classList?.contains('mermaid-genie-fullscreen-modal')) {
+              continue;
+            }
+
+            if (node.classList?.contains('mermaid')) {
+              if (node.dataset.mgReady !== 'true') {
+                this.pendingMutationNodes.add(node);
+                hasRelevant = true;
+              }
+            } else if (node.tagName?.toLowerCase() === 'svg' && node.parentElement?.classList?.contains('mermaid')) {
+              if (node.parentElement.dataset.mgReady !== 'true') {
+                this.pendingMutationNodes.add(node.parentElement);
+                hasRelevant = true;
+              }
+            } else if (node.classList?.contains('cm-embed-block') || node.classList?.contains('cm-preview-code-block')) {
+              const m = node.querySelector<HTMLElement>('.mermaid:not([data-mg-ready="true"])');
+              if (m) {
+                this.pendingMutationNodes.add(m);
+                hasRelevant = true;
+              }
+            }
+          }
+        }
+      }
+
+      if (hasRelevant && this.mutationRaf === null) {
+        this.mutationRaf = requestAnimationFrame(() => {
+          this.mutationRaf = null;
+          const nodes = Array.from(this.pendingMutationNodes);
+          this.pendingMutationNodes.clear();
+          for (const node of nodes) {
+            if (node.isConnected && node.dataset.mgReady !== 'true') {
+              decorateMermaidBlock(node, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls);
+            }
+          }
+        });
+      }
+    });
+
+    this.mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   refreshDiagrams(): void {
-    this.renderCache.clear();
     this.app.workspace.trigger('post-processor-change');
+    this.scheduleDecorateAll();
   }
 
   async saveSettings(): Promise<void> {
@@ -484,10 +627,30 @@ export default class MermaidGeniePlugin extends Plugin {
     if (!this.settings.pathHighlight) {
       document.querySelectorAll('.mpe-tracing, .mpe-on-path').forEach(el => el.classList.remove('mpe-tracing', 'mpe-on-path'));
     }
+
+    this.scheduleDecorateAll();
   }
 
   onunload(): void {
     this.stopped = true;
+    if (this.mutationRaf !== null) {
+      cancelAnimationFrame(this.mutationRaf);
+      this.mutationRaf = null;
+    }
+    this.mutationObserver?.disconnect();
+    this.pendingMutationNodes.clear();
+
+    const containers = document.querySelectorAll<HTMLElement>('.mermaid-genie-container, .mermaid');
+    for (const block of Array.from(containers)) {
+      teardownInlineZoom(block);
+      block.classList.remove('mermaid-genie-container', 'mermaid-genie-scaled', 'mermaid-genie-dragging');
+      delete block.dataset.mgScale;
+      delete block.dataset.mgReady;
+      for (const action of Array.from(block.querySelectorAll('.mermaid-genie-actions'))) {
+        action.remove();
+      }
+    }
+
     this.renderCache.clear();
     this.svgClipboard.clear();
     this.fileExport.dispose();

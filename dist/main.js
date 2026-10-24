@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => MermaidGeniePlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/colors.ts
 var LIGHT_SINGLE_PRESETS = {
@@ -356,7 +356,470 @@ var DiagramFileExport = class {
 };
 
 // src/export-controls.ts
+var import_obsidian3 = require("obsidian");
+
+// src/zoom-fullscreen.ts
 var import_obsidian2 = require("obsidian");
+var INLINE_MIN_SCALE = 0.25;
+var INLINE_MAX_SCALE = 4;
+var INLINE_ZOOM_STEP = 1.2;
+var pristineSvgStyles = /* @__PURE__ */ new WeakMap();
+var gestureTeardowns = /* @__PURE__ */ new WeakMap();
+function svgNaturalSize(svg) {
+  const vb = svg.viewBox?.baseVal;
+  if (vb && vb.width > 0 && vb.height > 0) {
+    return { width: vb.width, height: vb.height };
+  }
+  const attrWidth = parseFloat(svg.getAttribute("width") || "");
+  const attrHeight = parseFloat(svg.getAttribute("height") || "");
+  if (attrWidth > 0 && attrHeight > 0) {
+    return { width: attrWidth, height: attrHeight };
+  }
+  const rect = svg.getBoundingClientRect();
+  if (rect && rect.width > 0 && rect.height > 0) {
+    return { width: rect.width, height: rect.height };
+  }
+  return null;
+}
+function snapshotPristine(svg) {
+  if (pristineSvgStyles.has(svg)) return;
+  pristineSvgStyles.set(svg, {
+    width: svg.style.width,
+    height: svg.style.height,
+    maxWidth: svg.style.maxWidth
+  });
+}
+function restorePristine(svg) {
+  const pristine = pristineSvgStyles.get(svg);
+  if (!pristine) return;
+  svg.style.width = pristine.width;
+  svg.style.height = pristine.height;
+  svg.style.maxWidth = pristine.maxWidth;
+  pristineSvgStyles.delete(svg);
+}
+function getBlockScale(block) {
+  const parsed = parseFloat(block.dataset.mgScale ?? "");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+function setBlockScale(block, scale, anchorClientX) {
+  const svg = block.querySelector("svg.mfe-enhanced") || block.querySelector("svg");
+  if (!svg) return;
+  const natural = svgNaturalSize(svg);
+  if (!natural) return;
+  const newScale = Math.max(INLINE_MIN_SCALE, Math.min(INLINE_MAX_SCALE, scale));
+  const oldScale = getBlockScale(block);
+  if (Math.abs(newScale - 1) < 0.01) {
+    restorePristine(svg);
+    delete block.dataset.mgScale;
+    block.classList.remove("mermaid-genie-scaled");
+    block.scrollLeft = 0;
+    return;
+  }
+  snapshotPristine(svg);
+  svg.style.maxWidth = "none";
+  svg.style.width = `${Math.round(natural.width * newScale)}px`;
+  svg.style.height = `${Math.round(natural.height * newScale)}px`;
+  block.classList.add("mermaid-genie-scaled");
+  block.dataset.mgScale = String(newScale);
+  if (oldScale > 0) {
+    const rect = block.getBoundingClientRect();
+    const offsetX = anchorClientX !== void 0 ? anchorClientX - rect.left : rect.width / 2;
+    const oldContentWidth = natural.width * oldScale;
+    if (oldContentWidth > 0) {
+      const fraction = (block.scrollLeft + offsetX) / oldContentWidth;
+      const newLeft = fraction * natural.width * newScale - offsetX;
+      const maxLeft = block.scrollWidth - block.clientWidth;
+      block.scrollLeft = Math.max(0, Math.min(maxLeft, newLeft));
+    }
+  }
+}
+function zoomBlockBy(block, factor, anchorClientX) {
+  const current = getBlockScale(block);
+  setBlockScale(block, current * factor, anchorClientX);
+}
+function resetBlockZoom(block) {
+  setBlockScale(block, 1);
+}
+function attachInlineGestures(block) {
+  if (gestureTeardowns.has(block)) {
+    return gestureTeardowns.get(block);
+  }
+  const onWheel = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? INLINE_ZOOM_STEP : 1 / INLINE_ZOOM_STEP;
+      zoomBlockBy(block, factor, e.clientX);
+    }
+  };
+  let isDragging = false;
+  let startX = 0;
+  let scrollStart = 0;
+  const onPointerMove = (e) => {
+    if (!isDragging) return;
+    block.scrollLeft = scrollStart - (e.clientX - startX);
+  };
+  const onPointerEnd = (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    block.classList.remove("mermaid-genie-dragging");
+    try {
+      block.releasePointerCapture?.(e.pointerId);
+    } catch {
+    }
+    block.removeEventListener("pointermove", onPointerMove);
+    block.removeEventListener("pointerup", onPointerEnd);
+    block.removeEventListener("pointercancel", onPointerEnd);
+  };
+  const onPointerDown = (e) => {
+    if (e.pointerType === "touch") return;
+    if (e.button !== 0) return;
+    if (e.target?.closest?.(".mermaid-genie-actions")) return;
+    if (block.scrollWidth <= block.clientWidth + 1) return;
+    isDragging = true;
+    startX = e.clientX;
+    scrollStart = block.scrollLeft;
+    block.setPointerCapture?.(e.pointerId);
+    block.classList.add("mermaid-genie-dragging");
+    block.addEventListener("pointermove", onPointerMove);
+    block.addEventListener("pointerup", onPointerEnd);
+    block.addEventListener("pointercancel", onPointerEnd);
+  };
+  block.addEventListener("wheel", onWheel, { passive: false });
+  block.addEventListener("pointerdown", onPointerDown);
+  const teardown = () => {
+    block.removeEventListener("wheel", onWheel);
+    block.removeEventListener("pointerdown", onPointerDown);
+    block.removeEventListener("pointermove", onPointerMove);
+    block.removeEventListener("pointerup", onPointerEnd);
+    block.removeEventListener("pointercancel", onPointerEnd);
+  };
+  gestureTeardowns.set(block, teardown);
+  return teardown;
+}
+function teardownInlineZoom(block) {
+  const teardown = gestureTeardowns.get(block);
+  if (teardown) {
+    teardown();
+    gestureTeardowns.delete(block);
+  }
+  const svg = block.querySelector("svg");
+  if (svg) restorePristine(svg);
+  delete block.dataset.mgScale;
+  delete block.dataset.mgReady;
+  block.classList.remove("mermaid-genie-scaled", "mermaid-genie-dragging");
+}
+function setFullscreenIcon(el) {
+  const doc = el.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!doc) return;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const icon = doc.createElementNS(svgNS, "svg");
+  icon.setAttribute("width", "16");
+  icon.setAttribute("height", "16");
+  icon.setAttribute("viewBox", "0 0 16 16");
+  icon.setAttribute("fill", "none");
+  icon.setAttribute("stroke", "currentColor");
+  icon.setAttribute("stroke-width", "1.5");
+  icon.setAttribute("stroke-linecap", "round");
+  icon.setAttribute("stroke-linejoin", "round");
+  for (const points of ["1,6 1,1 6,1", "15,6 15,1 10,1", "1,10 1,15 6,15", "15,10 15,15 10,15"]) {
+    const polyline = doc.createElementNS(svgNS, "polyline");
+    polyline.setAttribute("points", points);
+    icon.appendChild(polyline);
+  }
+  el.appendChild(icon);
+}
+function makeElement(parent, tag, cls, text) {
+  const doc = parent.ownerDocument || (typeof document !== "undefined" ? document : null);
+  const el = doc ? doc.createElement(tag) : document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== void 0) el.textContent = text;
+  parent.appendChild(el);
+  return el;
+}
+function openFullscreenModal(opts) {
+  const { sourceSvg, onExport } = opts;
+  const doc = sourceSvg.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!doc) return;
+  const modal = doc.createElement("div");
+  modal.className = "mermaid-genie-fullscreen-modal";
+  const content = makeElement(modal, "div", "mermaid-genie-modal-content");
+  const zoomContainer = makeElement(content, "div", "mermaid-genie-modal-zoom-container");
+  const contentWrapper = makeElement(zoomContainer, "div", "mermaid-genie-modal-wrapper mermaid");
+  const svgClone = sourceSvg.cloneNode(true);
+  const viewBox = svgClone.viewBox?.baseVal;
+  svgClone.style.removeProperty("width");
+  svgClone.style.removeProperty("height");
+  svgClone.style.maxWidth = "none";
+  const host = sourceSvg.closest(".mermaid");
+  if (host) {
+    for (const cls of Array.from(host.classList)) {
+      if (cls !== "mermaid" && !cls.startsWith("mermaid-genie-")) {
+        contentWrapper.classList.add(cls);
+      }
+    }
+    const win2 = doc.defaultView || window;
+    const hostStyle = win2.getComputedStyle ? win2.getComputedStyle(host) : host.style;
+    const genieVars = [
+      "--mpe-node",
+      "--mpe-border",
+      "--mpe-group",
+      "--mpe-group-border",
+      "--mpe-line",
+      "--mpe-text",
+      "--mpe-label",
+      "--mpe-highlight",
+      "--mpe-duration",
+      "--mpe-cluster-bkg",
+      "--mpe-accent"
+    ];
+    for (const prop of genieVars) {
+      const val = hostStyle.getPropertyValue ? hostStyle.getPropertyValue(prop) : "";
+      if (val) {
+        contentWrapper.style.setProperty(prop, val);
+        svgClone.style.setProperty(prop, val);
+      }
+    }
+  }
+  const win = doc.defaultView || window;
+  const svgStyle = win.getComputedStyle ? win.getComputedStyle(sourceSvg) : sourceSvg.style;
+  for (const prop of ["--mpe-node", "--mpe-border", "--mpe-group", "--mpe-group-border", "--mpe-line", "--mpe-text", "--mpe-label", "--mpe-highlight", "--mpe-duration", "--mpe-cluster-bkg", "--mpe-accent"]) {
+    const val = svgStyle.getPropertyValue ? svgStyle.getPropertyValue(prop) : "";
+    if (val) {
+      svgClone.style.setProperty(prop, val);
+    }
+  }
+  contentWrapper.appendChild(svgClone);
+  const cloneRect = svgClone.getBoundingClientRect ? svgClone.getBoundingClientRect() : { width: 0, height: 0 };
+  const naturalWidth = viewBox?.width || cloneRect.width || parseFloat(svgClone.getAttribute("width") || "") || 400;
+  const naturalHeight = viewBox?.height || cloneRect.height || parseFloat(svgClone.getAttribute("height") || "") || 300;
+  const state = {
+    scale: 1,
+    minScale: 0.1,
+    maxScale: 6,
+    translateX: 0,
+    translateY: 0,
+    scaleIndicator: null
+  };
+  const updateTransform = () => {
+    svgClone.style.maxWidth = "none";
+    svgClone.style.width = `${Math.round(naturalWidth * state.scale)}px`;
+    svgClone.style.height = `${Math.round(naturalHeight * state.scale)}px`;
+    contentWrapper.style.transform = `translate(${state.translateX}px, ${state.translateY}px)`;
+    if (state.scaleIndicator) {
+      state.scaleIndicator.textContent = `${Math.round(state.scale * 100)}%`;
+    }
+  };
+  const zoomTo = (newScale, centerX, centerY) => {
+    const clampedScale = Math.max(state.minScale, Math.min(state.maxScale, newScale));
+    if (clampedScale === state.scale) return;
+    const cx = centerX !== void 0 ? centerX : zoomContainer.clientWidth / 2;
+    const cy = centerY !== void 0 ? centerY : zoomContainer.clientHeight / 2;
+    const scaleRatio = clampedScale / state.scale;
+    state.translateX = cx - (cx - state.translateX) * scaleRatio;
+    state.translateY = cy - (cy - state.translateY) * scaleRatio;
+    state.scale = clampedScale;
+    updateTransform();
+  };
+  const zoomBy = (factor, centerX, centerY) => {
+    zoomTo(state.scale * factor, centerX, centerY);
+  };
+  const fitToContainer = () => {
+    const cw = zoomContainer.clientWidth;
+    const ch = zoomContainer.clientHeight;
+    if (cw <= 0 || ch <= 0 || naturalWidth <= 0 || naturalHeight <= 0) return;
+    const padding = 48;
+    const availW = cw - padding * 2;
+    const availH = ch - padding * 2;
+    const scaleX = availW / naturalWidth;
+    const scaleY = availH / naturalHeight;
+    let fitScale = 1;
+    if (naturalWidth > availW || naturalHeight > availH) {
+      fitScale = Math.min(scaleX, scaleY);
+    } else {
+      fitScale = Math.min(1, Math.min(scaleX, scaleY));
+    }
+    const scaledW = naturalWidth * fitScale;
+    const scaledH = naturalHeight * fitScale;
+    state.scale = fitScale;
+    state.translateX = (cw - scaledW) / 2;
+    state.translateY = (ch - scaledH) / 2;
+    updateTransform();
+  };
+  const controls = makeElement(modal, "div", "mermaid-genie-modal-controls");
+  const makeBtn = (iconName, title, onClick, cls = "") => {
+    const btn = makeElement(controls, "button", `mermaid-genie-btn ${cls}`.trim());
+    btn.type = "button";
+    btn.setAttribute("aria-label", title);
+    btn.title = title;
+    (0, import_obsidian2.setIcon)(btn, iconName);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick(e);
+    });
+    return btn;
+  };
+  makeBtn("plus", "Zoom in", () => zoomBy(1.2));
+  makeBtn("minus", "Zoom out", () => zoomBy(1 / 1.2));
+  makeBtn("rotate-ccw", "Reset zoom to fit", () => fitToContainer());
+  const indicator = makeElement(controls, "span", "mermaid-genie-scale-indicator", "100%");
+  state.scaleIndicator = indicator;
+  makeBtn("image-down", "Export diagram", (e) => {
+    const menu = new import_obsidian2.Menu();
+    menu.addItem(
+      (item) => item.setTitle("Copy as PNG").setIcon("copy").onClick(() => onExport(svgClone, "copy"))
+    );
+    menu.addItem(
+      (item) => item.setTitle("Copy as SVG").setIcon("copy").onClick(() => onExport(svgClone, "copy-svg"))
+    );
+    menu.addSeparator();
+    menu.addItem(
+      (item) => item.setTitle(import_obsidian2.Platform.isDesktopApp ? "Export as PNG\u2026" : "Save as PNG").setIcon("image-down").onClick(() => onExport(svgClone, "png"))
+    );
+    menu.addItem(
+      (item) => item.setTitle(import_obsidian2.Platform.isDesktopApp ? "Export as SVG\u2026" : "Save as SVG").setIcon("file-code").onClick(() => onExport(svgClone, "svg"))
+    );
+    menu.showAtMouseEvent(e);
+  });
+  makeBtn("x", "Close fullscreen", () => closeModal(), "mermaid-genie-modal-close-btn");
+  const onWheel = (e) => {
+    e.preventDefault();
+    const rect = zoomContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    let delta = e.deltaY;
+    if (e.deltaMode === 1) delta *= 33;
+    else if (e.deltaMode === 2) delta *= 300;
+    const factor = Math.exp(-Math.max(-100, Math.min(100, delta)) / 100 * 0.15);
+    zoomBy(factor, mouseX, mouseY);
+  };
+  zoomContainer.addEventListener("wheel", onWheel, { passive: false });
+  let dragId = -1;
+  let lastClientX = 0;
+  let lastClientY = 0;
+  const onPointerDown = (e) => {
+    if (e.pointerType === "touch") return;
+    if (e.button !== 0) return;
+    if (e.target?.closest?.(".mermaid-genie-modal-controls")) return;
+    dragId = e.pointerId;
+    lastClientX = e.clientX;
+    lastClientY = e.clientY;
+    contentWrapper.classList.add("is-dragging");
+    zoomContainer.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e) => {
+    if (e.pointerId !== dragId) return;
+    const dx = e.clientX - lastClientX;
+    const dy = e.clientY - lastClientY;
+    lastClientX = e.clientX;
+    lastClientY = e.clientY;
+    state.translateX += dx;
+    state.translateY += dy;
+    updateTransform();
+  };
+  const onPointerUp = (e) => {
+    if (e.pointerId !== dragId) return;
+    dragId = -1;
+    contentWrapper.classList.remove("is-dragging");
+    try {
+      zoomContainer.releasePointerCapture?.(e.pointerId);
+    } catch {
+    }
+  };
+  zoomContainer.addEventListener("pointerdown", onPointerDown);
+  zoomContainer.addEventListener("pointermove", onPointerMove);
+  zoomContainer.addEventListener("pointerup", onPointerUp);
+  zoomContainer.addEventListener("pointercancel", onPointerUp);
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  const onTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      pinchStartDist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      pinchStartScale = state.scale;
+    } else if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      contentWrapper.classList.add("is-dragging");
+    }
+  };
+  const onTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchStartDist > 0) {
+      if (e.cancelable) e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      const rect = zoomContainer.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+      zoomTo(pinchStartScale * (dist / pinchStartDist), midX, midY);
+    } else if (e.touches.length === 1) {
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      state.translateX += dx;
+      state.translateY += dy;
+      updateTransform();
+    }
+  };
+  const onTouchEnd = () => {
+    pinchStartDist = 0;
+    contentWrapper.classList.remove("is-dragging");
+  };
+  zoomContainer.addEventListener("touchstart", onTouchStart, { passive: true });
+  zoomContainer.addEventListener("touchmove", onTouchMove, { passive: false });
+  zoomContainer.addEventListener("touchend", onTouchEnd);
+  zoomContainer.addEventListener("touchcancel", onTouchEnd);
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") {
+      closeModal();
+    } else if (e.key === "+" || e.key === "=") {
+      zoomBy(1.2);
+    } else if (e.key === "-" || e.key === "_") {
+      zoomBy(1 / 1.2);
+    } else if (e.key === "0") {
+      fitToContainer();
+    }
+  };
+  document.addEventListener("keydown", onKeyDown);
+  const popstateHandler = () => closeModal();
+  if (import_obsidian2.Platform.isMobile) {
+    history.pushState(null, "");
+    window.addEventListener("popstate", popstateHandler);
+  }
+  const closeModal = () => {
+    if (import_obsidian2.Platform.isMobile) {
+      window.removeEventListener("popstate", popstateHandler);
+    }
+    document.removeEventListener("keydown", onKeyDown);
+    zoomContainer.removeEventListener("wheel", onWheel);
+    zoomContainer.removeEventListener("pointerdown", onPointerDown);
+    zoomContainer.removeEventListener("pointermove", onPointerMove);
+    zoomContainer.removeEventListener("pointerup", onPointerUp);
+    zoomContainer.removeEventListener("pointercancel", onPointerUp);
+    zoomContainer.removeEventListener("touchstart", onTouchStart);
+    zoomContainer.removeEventListener("touchmove", onTouchMove);
+    zoomContainer.removeEventListener("touchend", onTouchEnd);
+    zoomContainer.removeEventListener("touchcancel", onTouchEnd);
+    modal.remove();
+  };
+  (doc.body || doc.documentElement).appendChild(modal);
+  const winRef = doc.defaultView || (typeof window !== "undefined" ? window : null);
+  if (winRef && typeof winRef.requestAnimationFrame === "function") {
+    winRef.requestAnimationFrame(() => fitToContainer());
+  } else {
+    setTimeout(() => fitToContainer(), 0);
+  }
+}
+
+// src/export-controls.ts
 async function exportDiagram(svg, action, sourcePath, svgClipboard, files) {
   try {
     const snapshot = diagramImage(svg);
@@ -370,16 +833,16 @@ async function exportDiagram(svg, action, sourcePath, svgClipboard, files) {
       const canvas = document.createElement("canvas");
       const blob = await diagramPng(snapshot, canvas);
       await clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      new import_obsidian2.Notice("Diagram copied to clipboard as PNG.");
+      new import_obsidian3.Notice("Diagram copied to clipboard as PNG.");
     } else {
       await files.save(snapshot, action, sourcePath);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    new import_obsidian2.Notice(`Export failed: ${message}`);
+    new import_obsidian3.Notice(`Export failed: ${message}`);
   }
 }
-var DiagramPickerModal = class extends import_obsidian2.SuggestModal {
+var DiagramPickerModal = class extends import_obsidian3.SuggestModal {
   constructor(app, diagrams, onSelect) {
     super(app);
     this.diagrams = diagrams;
@@ -401,92 +864,150 @@ var DiagramPickerModal = class extends import_obsidian2.SuggestModal {
     this.onSelect(item);
   }
 };
-var DiagramExportControls = class extends import_obsidian2.MarkdownRenderChild {
-  constructor(container, sourcePath, svgClipboard, files, isEnabled) {
-    super(container);
-    this.sourcePath = sourcePath;
-    this.svgClipboard = svgClipboard;
-    this.files = files;
-    this.isEnabled = isEnabled;
+var cachedDockTemplate = null;
+function createDockTemplate(doc) {
+  const actions = doc.createElement("div");
+  actions.className = "mermaid-genie-actions";
+  const exportBtn = doc.createElement("button");
+  exportBtn.className = "mermaid-genie-btn mermaid-genie-export-btn";
+  exportBtn.type = "button";
+  exportBtn.setAttribute("aria-label", "Copy and export diagram");
+  exportBtn.title = "Copy and export diagram";
+  exportBtn.dataset.action = "export";
+  (0, import_obsidian3.setIcon)(exportBtn, "image-down");
+  actions.appendChild(exportBtn);
+  const zoomOutBtn = doc.createElement("button");
+  zoomOutBtn.className = "mermaid-genie-btn mermaid-genie-zoom-out-btn";
+  zoomOutBtn.type = "button";
+  zoomOutBtn.setAttribute("aria-label", "Zoom out");
+  zoomOutBtn.title = "Zoom out";
+  zoomOutBtn.dataset.action = "zoom-out";
+  (0, import_obsidian3.setIcon)(zoomOutBtn, "minus");
+  actions.appendChild(zoomOutBtn);
+  const zoomInBtn = doc.createElement("button");
+  zoomInBtn.className = "mermaid-genie-btn mermaid-genie-zoom-in-btn";
+  zoomInBtn.type = "button";
+  zoomInBtn.setAttribute("aria-label", "Zoom in");
+  zoomInBtn.title = "Zoom in";
+  zoomInBtn.dataset.action = "zoom-in";
+  (0, import_obsidian3.setIcon)(zoomInBtn, "plus");
+  actions.appendChild(zoomInBtn);
+  const resetBtn = doc.createElement("button");
+  resetBtn.className = "mermaid-genie-btn mermaid-genie-reset-btn";
+  resetBtn.type = "button";
+  resetBtn.setAttribute("aria-label", "Reset zoom");
+  resetBtn.title = "Reset zoom";
+  resetBtn.dataset.action = "reset";
+  (0, import_obsidian3.setIcon)(resetBtn, "rotate-ccw");
+  actions.appendChild(resetBtn);
+  const fullscreenBtn = doc.createElement("button");
+  fullscreenBtn.className = "mermaid-genie-btn mermaid-genie-fullscreen-btn";
+  fullscreenBtn.type = "button";
+  fullscreenBtn.setAttribute("aria-label", "Fullscreen");
+  fullscreenBtn.title = "Fullscreen";
+  fullscreenBtn.dataset.action = "fullscreen";
+  setFullscreenIcon(fullscreenBtn);
+  actions.appendChild(fullscreenBtn);
+  return actions;
+}
+function getDockTemplate(doc) {
+  if (!cachedDockTemplate || cachedDockTemplate.ownerDocument !== doc) {
+    cachedDockTemplate = createDockTemplate(doc);
   }
-  observer;
-  controls = /* @__PURE__ */ new Map();
-  onload() {
-    this.scan();
-    this.observer = new MutationObserver(() => this.scan());
-    this.observer.observe(this.containerEl, { childList: true, subtree: true });
+  return cachedDockTemplate;
+}
+function decorateMermaidBlock(block, app, svgClipboard, files, isEnabled, sourcePath) {
+  if (!isEnabled()) return;
+  if (block.dataset.mgReady === "true" && block.querySelector(":scope > .mermaid-genie-actions")) {
+    return;
   }
-  scan() {
-    if (!this.isEnabled()) return;
-    for (const [svg, { host, actions, onScroll }] of this.controls) {
-      if (!this.containerEl.contains(svg)) {
-        host.removeEventListener("scroll", onScroll);
-        actions.remove();
-        this.controls.delete(svg);
-        if (!host.querySelector("svg.mfe-enhanced")) host.classList.remove("mermaid-genie-container");
+  if (block.querySelector(":scope > .mermaid-genie-actions")) {
+    block.dataset.mgReady = "true";
+    return;
+  }
+  const svg = block.querySelector("svg");
+  if (!svg) return;
+  block.classList.add("mermaid-genie-container");
+  block.dataset.mgReady = "true";
+  const doc = block.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!doc) return;
+  const actions = getDockTemplate(doc).cloneNode(true);
+  block.appendChild(actions);
+  let scrollRaf = null;
+  const onScroll = () => {
+    if (scrollRaf !== null) return;
+    const win = block.ownerDocument?.defaultView || (typeof window !== "undefined" ? window : null);
+    const schedule = win?.requestAnimationFrame || (typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame : (cb) => setTimeout(cb, 16));
+    scrollRaf = schedule(() => {
+      scrollRaf = null;
+      if (block.scrollLeft > 0) {
+        actions.style.transform = `translateX(${block.scrollLeft}px)`;
+      } else {
+        actions.style.removeProperty("transform");
       }
-    }
-    for (const svg of this.containerEl.querySelectorAll("svg.mfe-enhanced")) {
-      if (this.controls.has(svg) || !svg.parentElement?.matches(".mermaid")) continue;
-      const parent = svg.parentElement;
-      if (parent.querySelector(":scope > .mermaid-genie-actions")) continue;
-      parent.classList.add("mermaid-genie-container");
-      const actions = parent.createDiv({ cls: "mermaid-genie-actions" });
-      const onScroll = () => {
-        actions.style.setProperty("--mermaid-genie-scroll-offset", `${parent.scrollLeft}px`);
-      };
-      parent.addEventListener("scroll", onScroll, { passive: true });
-      onScroll();
-      const button = actions.createEl("button", {
-        cls: "mermaid-genie-export-btn",
-        attr: {
-          type: "button",
-          "aria-label": "Copy and export diagram",
-          title: "Copy and export diagram"
+    });
+  };
+  block.addEventListener("scroll", onScroll, { passive: true });
+  attachInlineGestures(block);
+  const getSourcePath = () => sourcePath || app.workspace?.getActiveFile?.()?.path || "";
+  actions.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  actions.addEventListener("click", (event) => {
+    const target = event.target;
+    const btn = target?.closest("button.mermaid-genie-btn");
+    if (!btn || !actions.contains(btn)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const action = btn.dataset.action;
+    const currentSvg = block.querySelector("svg") || svg;
+    const currentPath = getSourcePath();
+    if (action === "export") {
+      const menu = new import_obsidian3.Menu();
+      menu.addItem(
+        (item) => item.setTitle("Copy as PNG").setIcon("copy").onClick(() => {
+          void exportDiagram(currentSvg, "copy", currentPath, svgClipboard, files);
+        })
+      );
+      menu.addItem(
+        (item) => item.setTitle("Copy as SVG").setIcon("copy").onClick(() => {
+          void exportDiagram(currentSvg, "copy-svg", currentPath, svgClipboard, files);
+        })
+      );
+      menu.addSeparator();
+      menu.addItem(
+        (item) => item.setTitle(import_obsidian3.Platform.isDesktopApp ? "Export as PNG\u2026" : "Save as PNG").setIcon("image-down").onClick(() => {
+          void exportDiagram(currentSvg, "png", currentPath, svgClipboard, files);
+        })
+      );
+      menu.addItem(
+        (item) => item.setTitle(import_obsidian3.Platform.isDesktopApp ? "Export as SVG\u2026" : "Save as SVG").setIcon("file-code").onClick(() => {
+          void exportDiagram(currentSvg, "svg", currentPath, svgClipboard, files);
+        })
+      );
+      menu.showAtMouseEvent(event);
+    } else if (action === "zoom-out") {
+      zoomBlockBy(block, 1 / 1.2);
+    } else if (action === "zoom-in") {
+      zoomBlockBy(block, 1.2);
+    } else if (action === "reset") {
+      resetBlockZoom(block);
+    } else if (action === "fullscreen") {
+      openFullscreenModal({
+        app,
+        sourceSvg: currentSvg,
+        sourcePath: currentPath,
+        onExport: (exportedSvg, exportAct) => {
+          void exportDiagram(exportedSvg, exportAct, currentPath, svgClipboard, files);
         }
       });
-      (0, import_obsidian2.setIcon)(button, "image-down");
-      button.addEventListener("pointerdown", (event) => event.stopPropagation());
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const menu = new import_obsidian2.Menu();
-        menu.addItem(
-          (item) => item.setTitle("Copy as PNG").setIcon("copy").onClick(() => {
-            void exportDiagram(svg, "copy", this.sourcePath, this.svgClipboard, this.files);
-          })
-        );
-        menu.addItem(
-          (item) => item.setTitle("Copy as SVG").setIcon("copy").onClick(() => {
-            void exportDiagram(svg, "copy-svg", this.sourcePath, this.svgClipboard, this.files);
-          })
-        );
-        menu.addSeparator();
-        menu.addItem(
-          (item) => item.setTitle(import_obsidian2.Platform.isDesktopApp ? "Export as PNG\u2026" : "Save as PNG").setIcon("image-down").onClick(() => {
-            void exportDiagram(svg, "png", this.sourcePath, this.svgClipboard, this.files);
-          })
-        );
-        menu.addItem(
-          (item) => item.setTitle(import_obsidian2.Platform.isDesktopApp ? "Export as SVG\u2026" : "Save as SVG").setIcon("file-code").onClick(() => {
-            void exportDiagram(svg, "svg", this.sourcePath, this.svgClipboard, this.files);
-          })
-        );
-        menu.showAtMouseEvent(event);
-      });
-      this.controls.set(svg, { host: parent, actions, onScroll });
     }
+  });
+  const scale = getBlockScale(block);
+  if (scale !== 1 && !svg.style.width) {
+    setBlockScale(block, scale);
   }
-  onunload() {
-    this.observer?.disconnect();
-    for (const { host, actions, onScroll } of this.controls.values()) {
-      host.removeEventListener("scroll", onScroll);
-      host.classList.remove("mermaid-genie-container");
-      actions.remove();
-    }
-    this.controls.clear();
-  }
-};
+}
 
 // src/highlight.ts
 function ancestorPath(edges, target) {
@@ -543,12 +1064,17 @@ function highlightAncestors(element) {
   for (const el of interactiveElements) {
     const elKey = el.getAttribute("data-mpe-key");
     const elId = el.getAttribute("data-id") || el.querySelector("[data-id]")?.getAttribute("data-id") || el.id;
-    el.classList.toggle("mpe-on-path", elKey ? selected.nodes.has(elKey) : elId ? selected.edges.has(elId) : false);
+    const shouldBeOn = elKey ? selected.nodes.has(elKey) : elId ? selected.edges.has(elId) : false;
+    if (el.classList.contains("mpe-on-path") !== shouldBeOn) {
+      el.classList.toggle("mpe-on-path", shouldBeOn);
+    }
   }
 }
+var INTERACTIVE_SELECTOR = ".node, .flowchart-link, .edgePath path.path, .edgeLabels > .edgeLabel";
 function createPathController(doc, getSettings, timers) {
-  const target = ".mermaid svg.mfe-enhanced .node, .mermaid svg.mfe-enhanced .flowchart-link, .mermaid svg.mfe-enhanced .edgePath path.path, .mermaid svg.mfe-enhanced .edgeLabels > .edgeLabel";
   const pending = /* @__PURE__ */ new Map();
+  let activeNode = null;
+  let activeSvg = null;
   let disposed = false;
   const cancel = (svg) => {
     const timer = pending.get(svg);
@@ -556,25 +1082,41 @@ function createPathController(doc, getSettings, timers) {
     pending.delete(svg);
   };
   const reset = (svg) => {
+    if (activeSvg === svg) {
+      activeNode = null;
+      activeSvg = null;
+    }
     svg.classList.remove("mpe-tracing");
     svg.querySelectorAll(".mpe-on-path").forEach((el) => el.classList.remove("mpe-on-path"));
   };
   return {
     enter(event) {
       if (disposed || !getSettings().pathHighlight) return;
-      const node = event.target?.closest?.(target);
-      if (!node) return;
-      const svg = node.closest("svg");
+      const targetEl = event.target;
+      if (!targetEl) return;
+      if (targetEl.closest?.(".mermaid-genie-actions")) return;
+      const svg = targetEl.closest?.("svg.mfe-enhanced");
       if (!svg) return;
+      const node = targetEl.closest?.(INTERACTIVE_SELECTOR);
+      if (!node || !svg.contains(node)) return;
+      if (node === activeNode) return;
+      activeNode = node;
+      activeSvg = svg;
       cancel(svg);
       highlightAncestors(node);
     },
     leave(event) {
       if (disposed) return;
-      const node = event.target?.closest?.(target);
-      if (!node || node.contains(event.relatedTarget)) return;
-      const svg = node.closest("svg");
+      const targetEl = event.target;
+      if (!targetEl) return;
+      const svg = targetEl.closest?.("svg.mfe-enhanced");
       if (!svg) return;
+      const node = targetEl.closest?.(INTERACTIVE_SELECTOR);
+      if (!node || !svg.contains(node)) return;
+      if (node.contains(event.relatedTarget)) return;
+      if (node === activeNode) {
+        activeNode = null;
+      }
       cancel(svg);
       const ownerWindow = svg.ownerDocument?.defaultView;
       const ownerTimers = timers ?? {
@@ -589,6 +1131,8 @@ function createPathController(doc, getSettings, timers) {
     },
     dispose() {
       disposed = true;
+      activeNode = null;
+      activeSvg = null;
       pending.forEach((timer) => timer.timers.clearTimeout(timer.handle));
       pending.clear();
       doc.querySelectorAll("svg.mfe-enhanced").forEach(reset);
@@ -2047,7 +2591,7 @@ function wrapDecisions(source) {
 }
 
 // src/settings.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var DEFAULT_SETTINGS = Object.freeze({
   compactLayout: true,
   pathHighlight: true,
@@ -2089,7 +2633,7 @@ function normalizeSettings(value = {}) {
   }
   return result;
 }
-var GenieSettingsTab = class extends import_obsidian3.PluginSettingTab {
+var GenieSettingsTab = class extends import_obsidian4.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -2115,55 +2659,55 @@ var GenieSettingsTab = class extends import_obsidian3.PluginSettingTab {
     const repoLink = info.createEl("a", { text: "GitHub Repository & Documentation", href: "https://github.com/VibishnathanG/obsidian-mermaid-genie" });
     repoLink.style.color = "var(--text-accent)";
     containerEl.createEl("h3", { text: "Flowchart Layout & Routing" });
-    new import_obsidian3.Setting(containerEl).setName("Compact layout").setDesc("Align branches leaving decisions, shorten connectors, and wrap diamond labels nicely.").addToggle((toggle) => toggle.setValue(this.plugin.settings.compactLayout).onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Compact layout").setDesc("Align branches leaving decisions, shorten connectors, and wrap diamond labels nicely.").addToggle((toggle) => toggle.setValue(this.plugin.settings.compactLayout).onChange(async (value) => {
       this.plugin.settings.compactLayout = value;
       await this.plugin.saveSettings();
       this.plugin.refreshDiagrams();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Highlight ancestor paths").setDesc("Highlight incoming forward paths on hover or keyboard focus.").addToggle((toggle) => toggle.setValue(this.plugin.settings.pathHighlight).onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Highlight ancestor paths").setDesc("Highlight incoming forward paths on hover or keyboard focus.").addToggle((toggle) => toggle.setValue(this.plugin.settings.pathHighlight).onChange(async (value) => {
       this.plugin.settings.pathHighlight = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Node corner radius (px)").setDesc("Smooth rounded corners for rectangular flowchart blocks.").addSlider((slider) => slider.setLimits(0, 20, 1).setValue(this.plugin.settings.nodeRadius).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Node corner radius (px)").setDesc("Smooth rounded corners for rectangular flowchart blocks.").addSlider((slider) => slider.setLimits(0, 20, 1).setValue(this.plugin.settings.nodeRadius).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.nodeRadius = value;
       await this.plugin.saveSettings();
       this.plugin.refreshDiagrams();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Animation duration (ms)").setDesc("Transition timing for path highlighting and fades.").addSlider((slider) => slider.setLimits(0, 2e3, 50).setValue(this.plugin.settings.animationDuration).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Animation duration (ms)").setDesc("Transition timing for path highlighting and fades.").addSlider((slider) => slider.setLimits(0, 2e3, 50).setValue(this.plugin.settings.animationDuration).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.animationDuration = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Hover reset delay (ms)").setDesc("Delay before clearing highlighted paths when mouse leaves diagram elements.").addSlider((slider) => slider.setLimits(0, 1e3, 20).setValue(this.plugin.settings.hoverDelay).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Hover reset delay (ms)").setDesc("Delay before clearing highlighted paths when mouse leaves diagram elements.").addSlider((slider) => slider.setLimits(0, 1e3, 20).setValue(this.plugin.settings.hoverDelay).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.hoverDelay = value;
       await this.plugin.saveSettings();
     }));
     containerEl.createEl("h3", { text: "Colored Flow Blocks & Theme" });
-    new import_obsidian3.Setting(containerEl).setName("Color style").setDesc("Choose between coordinated multi-colored flow blocks or a uniform preset.").addDropdown((dropdown) => dropdown.addOption("multi", "Coordinated Multi-Color (Branches & Subgraphs)").addOption("single", "Single-Hue Preset (Uniform Accent)").setValue(this.plugin.settings.colorStyle).onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Color style").setDesc("Choose between coordinated multi-colored flow blocks or a uniform preset.").addDropdown((dropdown) => dropdown.addOption("multi", "Coordinated Multi-Color (Branches & Subgraphs)").addOption("single", "Single-Hue Preset (Uniform Accent)").setValue(this.plugin.settings.colorStyle).onChange(async (value) => {
       this.plugin.settings.colorStyle = value;
       await this.plugin.saveSettings();
       this.plugin.refreshDiagrams();
       this.display();
     }));
     if (this.plugin.settings.colorStyle === "multi") {
-      new import_obsidian3.Setting(containerEl).setName("Multi-color palette").setDesc("Select the coordinated palette used to color flow branches and clusters.").addDropdown((dropdown) => dropdown.addOption("clear", "Clear (Fresh & Balanced: Blue, Teal, Amber, Violet)").addOption("cool", "Cool (Modern High-Tech: Indigo, Cyan, Slate)").addOption("natural", "Natural (Earthy Harmony: Sage, Ochre, Terracotta)").setValue(this.plugin.settings.multiPalette).onChange(async (value) => {
+      new import_obsidian4.Setting(containerEl).setName("Multi-color palette").setDesc("Select the coordinated palette used to color flow branches and clusters.").addDropdown((dropdown) => dropdown.addOption("clear", "Clear (Fresh & Balanced: Blue, Teal, Amber, Violet)").addOption("cool", "Cool (Modern High-Tech: Indigo, Cyan, Slate)").addOption("natural", "Natural (Earthy Harmony: Sage, Ochre, Terracotta)").setValue(this.plugin.settings.multiPalette).onChange(async (value) => {
         this.plugin.settings.multiPalette = value;
         await this.plugin.saveSettings();
         this.plugin.refreshDiagrams();
       }));
     } else if (this.plugin.settings.colorStyle === "single") {
-      new import_obsidian3.Setting(containerEl).setName("Single-hue preset").setDesc("Select the uniform theme color for flowchart blocks.").addDropdown((dropdown) => dropdown.addOption("slate", "Slate Blue (Professional & Clean)").addOption("mint", "Fresh Mint (Crisp Green)").addOption("sky", "Sky Blue (Bright & Vibrant)").addOption("rose", "Rose Berry (Warm & Sophisticated)").setValue(this.plugin.settings.singlePalette).onChange(async (value) => {
+      new import_obsidian4.Setting(containerEl).setName("Single-hue preset").setDesc("Select the uniform theme color for flowchart blocks.").addDropdown((dropdown) => dropdown.addOption("slate", "Slate Blue (Professional & Clean)").addOption("mint", "Fresh Mint (Crisp Green)").addOption("sky", "Sky Blue (Bright & Vibrant)").addOption("rose", "Rose Berry (Warm & Sophisticated)").setValue(this.plugin.settings.singlePalette).onChange(async (value) => {
         this.plugin.settings.singlePalette = value;
         await this.plugin.saveSettings();
         this.plugin.refreshDiagrams();
       }));
     }
-    containerEl.createEl("h3", { text: "Diagram Export & Clipboard" });
-    new import_obsidian3.Setting(containerEl).setName("Show diagram action button").setDesc("Display a floating export button in the corner of rendered Mermaid diagrams.").addToggle((toggle) => toggle.setValue(this.plugin.settings.exportControls).onChange(async (value) => {
+    containerEl.createEl("h3", { text: "Diagram Controls & Export" });
+    new import_obsidian4.Setting(containerEl).setName("Show diagram controls").setDesc("Display floating action buttons (export, zoom, reset, and fullscreen) on rendered Mermaid diagrams.").addToggle((toggle) => toggle.setValue(this.plugin.settings.exportControls).onChange(async (value) => {
       this.plugin.settings.exportControls = value;
       await this.plugin.saveSettings();
       this.plugin.refreshDiagrams();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Default export folder").setDesc("Optional path for saved PNG and SVG diagrams. Leave blank to use vault attachment settings.").addText((text) => text.setPlaceholder("e.g. Attachments/Diagrams").setValue(this.plugin.settings.exportFolder || "").onChange(async (value) => {
+    new import_obsidian4.Setting(containerEl).setName("Default export folder").setDesc("Optional path for saved PNG and SVG diagrams. Leave blank to use vault attachment settings.").addText((text) => text.setPlaceholder("e.g. Attachments/Diagrams").setValue(this.plugin.settings.exportFolder || "").onChange(async (value) => {
       this.plugin.settings.exportFolder = value.trim();
       await this.plugin.saveSettings();
     }));
@@ -2171,7 +2715,7 @@ var GenieSettingsTab = class extends import_obsidian3.PluginSettingTab {
 };
 
 // src/svg-clipboard.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var SvgClipboard = class {
   constructor(app) {
     this.app = app;
@@ -2193,9 +2737,9 @@ var SvgClipboard = class {
         })
       ]);
       this.copied = copied;
-      new import_obsidian4.Notice("Diagram SVG copied to clipboard.");
+      new import_obsidian5.Notice("Diagram SVG copied to clipboard.");
     } catch {
-      new import_obsidian4.Notice("Could not write SVG to clipboard.");
+      new import_obsidian5.Notice("Could not write SVG to clipboard.");
     }
   }
   paste(event, editor, info) {
@@ -2215,7 +2759,7 @@ var SvgClipboard = class {
       if (gen !== this.generation || info.file?.path !== sourcePath) return;
       editor.replaceSelection(`!${this.app.fileManager.generateMarkdownLink(file, sourcePath)}`);
     } catch {
-      new import_obsidian4.Notice("Could not paste diagram SVG.");
+      new import_obsidian5.Notice("Could not paste diagram SVG.");
     }
   }
   clear() {
@@ -2887,12 +3431,12 @@ function adaptDiagramSource(source) {
 }
 
 // src/main.ts
-var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
+var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
   stopped = false;
   settings = { ...DEFAULT_SETTINGS };
   svgClipboard = new SvgClipboard(this.app);
   renderCache = /* @__PURE__ */ new Map();
-  maxCacheSize = 150;
+  maxCacheSize = 1e4;
   fileExport = new DiagramFileExport(
     this.app,
     () => this.settings.exportFolder,
@@ -2901,6 +3445,9 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       await this.saveSettings();
     }
   );
+  mutationObserver;
+  pendingMutationNodes = /* @__PURE__ */ new Set();
+  mutationRaf = null;
   async onload() {
     this.stopped = false;
     this.settings = normalizeSettings(await this.loadData());
@@ -2912,19 +3459,29 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
     this.registerDomEvent(document, "focusin", (event) => controller.enter(event));
     this.registerDomEvent(document, "focusout", (event) => controller.leave(event));
     this.register(() => controller.dispose());
+    this.setupMutationObserver();
+    this.app.workspace.onLayoutReady(() => {
+      this.scheduleDecorateAll();
+    });
+    this.registerEvent(this.app.workspace.on("layout-change", () => {
+      this.scheduleDecorateAll();
+    }));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => {
+      this.scheduleDecorateAll();
+    }));
+    this.registerEvent(this.app.workspace.on("file-open", async (file) => {
+      this.scheduleDecorateAll();
+      if (!file || file.extension !== "md") return;
+      try {
+        const content = await this.app.vault.cachedRead(file);
+        void this.prewarmDiagramsInText(content);
+      } catch (err) {
+        console.debug("Mermaid Genie prewarm error:", err);
+      }
+    }));
     this.registerMarkdownPostProcessor((element, context) => {
       if (this.stopped || !this.settings.exportControls) return;
-      if (!element.matches(".mermaid, .mermaid-wrapper") && !element.querySelector(".mermaid, .mermaid-wrapper, code.language-mermaid")) {
-        return;
-      }
-      const controls = new DiagramExportControls(
-        element,
-        context.sourcePath,
-        this.svgClipboard,
-        this.fileExport,
-        () => this.settings.exportControls
-      );
-      context.addChild(controls);
+      this.decorateMermaidBlocksIn(element, context.sourcePath);
     });
     this.registerEvent(
       this.app.workspace.on("editor-paste", (event, editor, info) => {
@@ -2937,7 +3494,7 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       })
     );
     this.registerCommands();
-    const mermaid = await (0, import_obsidian5.loadMermaid)();
+    const mermaid = await (0, import_obsidian6.loadMermaid)();
     if (this.stopped) return;
     const original = mermaid.render;
     const getSettings = () => this.settings;
@@ -3253,8 +3810,8 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
         id: item.id,
         name: item.name,
         checkCallback: (checking) => {
-          const view = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
-          const diagrams = Array.from(view?.containerEl.querySelectorAll(".mermaid > svg.mfe-enhanced") ?? []);
+          const view = this.app.workspace.getActiveViewOfType(import_obsidian6.MarkdownView);
+          const diagrams = Array.from(view?.containerEl.querySelectorAll(".mermaid > svg") ?? []);
           if (!diagrams.length) return false;
           if (!checking) {
             const handleExport = (svg) => {
@@ -3271,9 +3828,115 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
       });
     }
   }
+  scheduleDecorateAll() {
+    if (this.stopped || !this.settings.exportControls) return;
+    if (this.mutationRaf !== null) return;
+    this.mutationRaf = requestAnimationFrame(() => {
+      this.mutationRaf = null;
+      this.decorateAllMermaidBlocks();
+    });
+  }
+  decorateAllMermaidBlocks() {
+    if (this.stopped || !this.settings.exportControls) return;
+    const blocks = document.querySelectorAll(".mermaid");
+    for (const block of Array.from(blocks)) {
+      decorateMermaidBlock(block, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls);
+    }
+  }
+  decorateMermaidBlocksIn(root, sourcePath = "") {
+    if (this.stopped || !this.settings.exportControls) return;
+    const blocks = [];
+    if (root.classList?.contains("mermaid")) {
+      blocks.push(root);
+    } else {
+      for (const block of Array.from(root.querySelectorAll(".mermaid"))) {
+        blocks.push(block);
+      }
+      const host = root.closest?.(".mermaid");
+      if (host && !blocks.includes(host)) blocks.push(host);
+    }
+    for (const block of blocks) {
+      decorateMermaidBlock(block, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls, sourcePath);
+    }
+  }
+  async prewarmDiagramsInText(text) {
+    const mermaidRegex = /```(?:mermaid)\r?\n([\s\S]*?)```/g;
+    let match;
+    const sources = [];
+    while ((match = mermaidRegex.exec(text)) !== null) {
+      const code = match[1]?.trim();
+      if (code && !/^\s*%%\s*(?:mg|mfe):off\s*$/m.test(code)) {
+        sources.push(code);
+      }
+    }
+    if (!sources.length) return;
+    const mermaid = await (0, import_obsidian6.loadMermaid)();
+    if (this.stopped || !mermaid?.render) return;
+    for (let i = 0; i < sources.length; i++) {
+      if (this.stopped) break;
+      const source = sources[i];
+      const tempId = `mermaid-prewarm-${Date.now()}-${i}`;
+      try {
+        await mermaid.render(tempId, source);
+      } catch {
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  setupMutationObserver() {
+    if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+    this.mutationObserver = new MutationObserver((mutations) => {
+      let hasRelevant = false;
+      for (const mutation of Array.from(mutations)) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            if (node.classList?.contains("cm-line") || node.classList?.contains("cm-gutterElement") || node.classList?.contains("cm-cursor")) {
+              continue;
+            }
+            if (node.classList?.contains("mermaid-genie-actions") || node.classList?.contains("mermaid-genie-fullscreen-modal")) {
+              continue;
+            }
+            if (node.classList?.contains("mermaid")) {
+              if (node.dataset.mgReady !== "true") {
+                this.pendingMutationNodes.add(node);
+                hasRelevant = true;
+              }
+            } else if (node.tagName?.toLowerCase() === "svg" && node.parentElement?.classList?.contains("mermaid")) {
+              if (node.parentElement.dataset.mgReady !== "true") {
+                this.pendingMutationNodes.add(node.parentElement);
+                hasRelevant = true;
+              }
+            } else if (node.classList?.contains("cm-embed-block") || node.classList?.contains("cm-preview-code-block")) {
+              const m = node.querySelector('.mermaid:not([data-mg-ready="true"])');
+              if (m) {
+                this.pendingMutationNodes.add(m);
+                hasRelevant = true;
+              }
+            }
+          }
+        }
+      }
+      if (hasRelevant && this.mutationRaf === null) {
+        this.mutationRaf = requestAnimationFrame(() => {
+          this.mutationRaf = null;
+          const nodes = Array.from(this.pendingMutationNodes);
+          this.pendingMutationNodes.clear();
+          for (const node of nodes) {
+            if (node.isConnected && node.dataset.mgReady !== "true") {
+              decorateMermaidBlock(node, this.app, this.svgClipboard, this.fileExport, () => this.settings.exportControls);
+            }
+          }
+        });
+      }
+    });
+    this.mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
   refreshDiagrams() {
-    this.renderCache.clear();
     this.app.workspace.trigger("post-processor-change");
+    this.scheduleDecorateAll();
   }
   async saveSettings() {
     this.renderCache.clear();
@@ -3285,9 +3948,26 @@ var MermaidGeniePlugin = class extends import_obsidian5.Plugin {
     if (!this.settings.pathHighlight) {
       document.querySelectorAll(".mpe-tracing, .mpe-on-path").forEach((el) => el.classList.remove("mpe-tracing", "mpe-on-path"));
     }
+    this.scheduleDecorateAll();
   }
   onunload() {
     this.stopped = true;
+    if (this.mutationRaf !== null) {
+      cancelAnimationFrame(this.mutationRaf);
+      this.mutationRaf = null;
+    }
+    this.mutationObserver?.disconnect();
+    this.pendingMutationNodes.clear();
+    const containers = document.querySelectorAll(".mermaid-genie-container, .mermaid");
+    for (const block of Array.from(containers)) {
+      teardownInlineZoom(block);
+      block.classList.remove("mermaid-genie-container", "mermaid-genie-scaled", "mermaid-genie-dragging");
+      delete block.dataset.mgScale;
+      delete block.dataset.mgReady;
+      for (const action of Array.from(block.querySelectorAll(".mermaid-genie-actions"))) {
+        action.remove();
+      }
+    }
     this.renderCache.clear();
     this.svgClipboard.clear();
     this.fileExport.dispose();

@@ -5,6 +5,8 @@ import path from "node:path";
 
 const watch = process.argv.includes("--watch");
 
+const VAULT_DIR = "/mnt/c/Users/vibis/OneDrive/Documents/Obsidian Vault/.obsidian/plugins/mermaid-genie-local";
+
 async function copyToDist() {
   await fs.mkdir("dist", { recursive: true });
   for (const file of ["main.js", "manifest.json", "styles.css", "data.json", "DATA_OPTIONS.md", "mermaid-syntax-gallery.md"]) {
@@ -13,6 +15,18 @@ async function copyToDist() {
     } catch (err) {
       console.warn(`Could not copy ${file} to dist:`, err);
     }
+  }
+
+  try {
+    const vaultStat = await fs.stat(VAULT_DIR);
+    if (vaultStat.isDirectory()) {
+      for (const file of ["main.js", "manifest.json", "styles.css", "data.json"]) {
+        await fs.copyFile(file, path.join(VAULT_DIR, file));
+      }
+      console.log(`Synced plugin build directly to vault: ${VAULT_DIR}`);
+    }
+  } catch {
+    // Vault directory not mounted/available, ignore
   }
 }
 

@@ -228,12 +228,12 @@ export class GenieSettingsTab extends PluginSettingTab {
           }));
     }
 
-    // --- Export Options ---
-    containerEl.createEl('h3', { text: 'Diagram Export & Clipboard' });
+    // --- Diagram Controls & Export ---
+    containerEl.createEl('h3', { text: 'Diagram Controls & Export' });
 
     new Setting(containerEl)
-      .setName('Show diagram action button')
-      .setDesc('Display a floating export button in the corner of rendered Mermaid diagrams.')
+      .setName('Show diagram controls')
+      .setDesc('Display floating action buttons (export, zoom, reset, and fullscreen) on rendered Mermaid diagrams.')
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.exportControls)
         .onChange(async value => {

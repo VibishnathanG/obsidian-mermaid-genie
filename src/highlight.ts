@@ -88,17 +88,23 @@ export function highlightAncestors(element: Element): void {
   for (const el of interactiveElements) {
     const elKey = el.getAttribute('data-mpe-key');
     const elId = el.getAttribute('data-id') || el.querySelector('[data-id]')?.getAttribute('data-id') || el.id;
-    el.classList.toggle('mpe-on-path', elKey ? selected.nodes.has(elKey) : (elId ? selected.edges.has(elId) : false));
+    const shouldBeOn = elKey ? selected.nodes.has(elKey) : (elId ? selected.edges.has(elId) : false);
+    if (el.classList.contains('mpe-on-path') !== shouldBeOn) {
+      el.classList.toggle('mpe-on-path', shouldBeOn);
+    }
   }
 }
+
+const INTERACTIVE_SELECTOR = '.node, .flowchart-link, .edgePath path.path, .edgeLabels > .edgeLabel';
 
 export function createPathController(
   doc: Pick<Document, 'querySelectorAll'>,
   getSettings: () => { pathHighlight: boolean; hoverDelay: number },
   timers?: PathTimers
 ): PathController {
-  const target = '.mermaid svg.mfe-enhanced .node, .mermaid svg.mfe-enhanced .flowchart-link, .mermaid svg.mfe-enhanced .edgePath path.path, .mermaid svg.mfe-enhanced .edgeLabels > .edgeLabel';
   const pending = new Map<Element, { handle: TimerHandle; timers: PathTimers }>();
+  let activeNode: Element | null = null;
+  let activeSvg: SVGSVGElement | null = null;
   let disposed = false;
 
   const cancel = (svg: Element) => {
@@ -108,6 +114,10 @@ export function createPathController(
   };
 
   const reset = (svg: Element) => {
+    if (activeSvg === svg) {
+      activeNode = null;
+      activeSvg = null;
+    }
     svg.classList.remove('mpe-tracing');
     svg.querySelectorAll('.mpe-on-path').forEach(el => el.classList.remove('mpe-on-path'));
   };
@@ -115,19 +125,36 @@ export function createPathController(
   return {
     enter(event) {
       if (disposed || !getSettings().pathHighlight) return;
-      const node = (event.target as Element | null)?.closest?.(target);
-      if (!node) return;
-      const svg = node.closest('svg');
+      const targetEl = event.target as Element | null;
+      if (!targetEl) return;
+      // Fast path: bail immediately if not inside an enhanced SVG or inside dock actions
+      if (targetEl.closest?.('.mermaid-genie-actions')) return;
+      const svg = targetEl.closest?.('svg.mfe-enhanced') as SVGSVGElement | null;
       if (!svg) return;
+
+      const node = targetEl.closest?.(INTERACTIVE_SELECTOR);
+      if (!node || !svg.contains(node)) return;
+      if (node === activeNode) return;
+
+      activeNode = node;
+      activeSvg = svg;
       cancel(svg);
       highlightAncestors(node);
     },
     leave(event) {
       if (disposed) return;
-      const node = (event.target as Element | null)?.closest?.(target);
-      if (!node || node.contains((event as MouseEvent | FocusEvent).relatedTarget as Node | null)) return;
-      const svg = node.closest('svg');
+      const targetEl = event.target as Element | null;
+      if (!targetEl) return;
+      const svg = targetEl.closest?.('svg.mfe-enhanced') as SVGSVGElement | null;
       if (!svg) return;
+
+      const node = targetEl.closest?.(INTERACTIVE_SELECTOR);
+      if (!node || !svg.contains(node)) return;
+      if (node.contains((event as MouseEvent | FocusEvent).relatedTarget as Node | null)) return;
+
+      if (node === activeNode) {
+        activeNode = null;
+      }
       cancel(svg);
       const ownerWindow = svg.ownerDocument?.defaultView;
       const ownerTimers = timers ?? {
@@ -142,6 +169,8 @@ export function createPathController(
     },
     dispose() {
       disposed = true;
+      activeNode = null;
+      activeSvg = null;
       pending.forEach(timer => timer.timers.clearTimeout(timer.handle));
       pending.clear();
       doc.querySelectorAll('svg.mfe-enhanced').forEach(reset);
