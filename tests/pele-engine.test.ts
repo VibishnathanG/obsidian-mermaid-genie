@@ -129,6 +129,52 @@ describe('Pele Engine Integration & Cosmetics', () => {
     assert.match(resultSvg, /--pele-surface:\s*#edf0f5/);
   });
 
+  it('renders D01 flowchart and D02 swimlanes from gallery', () => {
+    const d01 = `flowchart TD
+    Start([Start Process]) --> Check{"Binding Constraint?"}
+    Check -->|Balanced, general| M["M Family: General"]
+    Check -->|CPU-bound| C["C Family: Compute"]
+    Check -->|Memory-bound| R["R Family: Memory"]
+    Check -->|Storage IOPS| I["I Family: Storage"]
+    Check -->|GPU accelerated| P["P Family: Accelerated"]
+    Check -->|Low and spiky| T["T Family: Burstable"]
+    M --> Final{"ARM Architecture?"}
+    C --> Final
+    R --> Final
+    Final -->|Yes| Graviton["AWS Graviton instance"]
+    Final -->|No| x86["Standard x86 instance"]`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const d01Svg = renderWithPele({
+      text: d01,
+      id: 'd01',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(d01Svg, 'D01 should render with Pele');
+
+    const d02 = `flowchart LR
+    subgraph Client["👤 Client Layer"]
+        Req["Submit Order"]
+        Wait["Wait for Confirmation"]
+    end
+    subgraph Gateway["🛡️ API Gateway"]
+        Auth["Authenticate Token"]
+        Route["Route Service"]
+    end
+    Req --> Auth`;
+
+    const d02Svg = renderWithPele({
+      text: d02,
+      id: 'd02',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(d02Svg, 'D02 should render with Pele');
+  });
+
   it('gracefully returns null for unsupported or invalid syntax to enable fallback', () => {
     const text = 'completely invalid mermaid syntax !!!@@#';
     const palette = resolvePaletteData('multi', 'clear', 'slate', true);

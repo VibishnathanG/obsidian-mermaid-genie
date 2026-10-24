@@ -24652,7 +24652,14 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
         const cachedIdMatch = cached.svg.match(/^<svg\s+id="([^"]*)"/);
         const cachedId = cachedIdMatch?.[1];
         const currentIdSvg = cachedId && cachedId !== id2 ? cached.svg.split(cachedId).join(id2) : cached.svg.replace(/^<svg\s+id="[^"]*"/, `<svg id="${id2}"`);
-        return typeof cached.raw === "string" ? currentIdSvg : { ...cached.raw, svg: currentIdSvg };
+        const cachedResult = {
+          ...typeof cached.raw === "object" && cached.raw !== null ? cached.raw : {},
+          svg: currentIdSvg,
+          bindFunctions: typeof cached.raw?.bindFunctions === "function" ? cached.raw.bindFunctions : () => {
+          }
+        };
+        cachedResult.toString = () => currentIdSvg;
+        return cachedResult;
       }
       const directionMatch = text.match(/^\s*(?:flowchart|graph)\s+(TD|TB|BT|LR|RL)\b/m);
       const direction = directionMatch?.[1];
@@ -24673,12 +24680,18 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
             dark
           });
           if (peleSvg) {
+            const peleResult = {
+              svg: peleSvg,
+              bindFunctions: () => {
+              }
+            };
+            peleResult.toString = () => peleSvg;
             if (cache.size >= maxCache) {
               const oldestKey = cache.keys().next().value;
               if (oldestKey) cache.delete(oldestKey);
             }
-            cache.set(cacheKey, { svg: peleSvg, raw: peleSvg });
-            return peleSvg;
+            cache.set(cacheKey, { svg: peleSvg, raw: peleResult });
+            return peleResult;
           }
         } catch (peleErr) {
           console.debug("Mermaid Genie: Pele compile error, falling back to Mermaid.js:", peleErr);
@@ -24915,16 +24928,29 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
       try {
         const rawSvg = typeof result === "string" ? result : result.svg;
         const enhancedSvg = styleSvg(rawSvg, direction ?? "", currentSettings, palette, dark);
-        const finalResult = typeof result === "string" ? enhancedSvg : { ...result, svg: enhancedSvg };
+        const finalResult = {
+          ...typeof result === "object" && result !== null ? result : {},
+          svg: enhancedSvg,
+          bindFunctions: typeof result?.bindFunctions === "function" ? result.bindFunctions : () => {
+          }
+        };
+        finalResult.toString = () => enhancedSvg;
         if (cache.size >= maxCache) {
           const oldestKey = cache.keys().next().value;
           if (oldestKey) cache.delete(oldestKey);
         }
-        cache.set(cacheKey, { svg: enhancedSvg, raw: result });
+        cache.set(cacheKey, { svg: enhancedSvg, raw: finalResult });
         return finalResult;
       } catch (error) {
         console.warn("Mermaid Genie: kept original SVG after layout/styling failed", error);
-        return result;
+        const fallbackResult = {
+          ...typeof result === "object" && result !== null ? result : {},
+          svg: typeof result === "string" ? result : result?.svg || "",
+          bindFunctions: typeof result?.bindFunctions === "function" ? result.bindFunctions : () => {
+          }
+        };
+        fallbackResult.toString = () => fallbackResult.svg;
+        return fallbackResult;
       }
     };
     mermaid.render = wrapped;
