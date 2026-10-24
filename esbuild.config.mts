@@ -9,7 +9,7 @@ const VAULT_DIR = "/mnt/c/Users/vibis/OneDrive/Documents/Obsidian Vault/.obsidia
 
 async function copyToDist() {
   await fs.mkdir("dist", { recursive: true });
-  for (const file of ["main.js", "manifest.json", "styles.css", "data.json", "DATA_OPTIONS.md", "mermaid-syntax-gallery.md"]) {
+  for (const file of ["main.js", "manifest.json", "styles.css", "data.json", "DATA_OPTIONS.md", "mermaid-syntax-gallery.md", "README.md"]) {
     try {
       await fs.copyFile(file, path.join("dist", file));
     } catch (err) {
@@ -20,7 +20,7 @@ async function copyToDist() {
   try {
     const vaultStat = await fs.stat(VAULT_DIR);
     if (vaultStat.isDirectory()) {
-      for (const file of ["main.js", "manifest.json", "styles.css", "data.json"]) {
+      for (const file of ["main.js", "manifest.json", "styles.css", "data.json", "README.md", "mermaid-syntax-gallery.md"]) {
         await fs.copyFile(file, path.join(VAULT_DIR, file));
       }
       console.log(`Synced plugin build directly to vault: ${VAULT_DIR}`);
