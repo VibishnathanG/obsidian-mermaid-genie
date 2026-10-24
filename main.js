@@ -2099,30 +2099,24 @@ function fixGanttChart(doc, palette, dark) {
       title.style.fontWeight = "700";
     }
   }
-  const isMulti = palette.fills.length > 0;
-  let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute("class") || "";
     if (cls.includes("done")) {
       rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#222f3e" : "#e2e8f0"));
       rect.setAttribute("stroke", palette.border);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
     } else if (cls.includes("active")) {
       rect.setAttribute("fill", palette.accent);
       rect.setAttribute("stroke", palette.accent);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
     } else if (!cls.includes("milestone")) {
-      const slot = taskBarIdx % (palette.fills.length || 1);
-      const fill = isMulti ? palette.fills[slot] : palette.surface;
-      const stroke = isMulti ? palette.borders[slot] : palette.border;
-      taskBarIdx++;
-      rect.setAttribute("fill", fill);
-      rect.setAttribute("stroke", stroke);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("fill", palette.surface);
+      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
     }
@@ -2210,18 +2204,11 @@ function fixClassDiagram(doc, palette, _dark) {
   const root = doc.documentElement;
   const isClass = root.classList.contains("classDiagram") || root.getAttribute("aria-roledescription") === "classDiagram" || !!doc.querySelector('.classDiagram, g.classGroup, .classTitle, .classLabel, [id*="classId"]');
   if (!isClass) return;
-  const isMulti = palette.fills.length > 0;
-  const classNodes = Array.from(doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]'));
-  for (let i = 0; i < classNodes.length; i++) {
-    const node = classNodes[i];
-    const slot = i % (palette.fills.length || 1);
-    const fill = isMulti ? palette.fills[slot] : palette.surface;
-    const stroke = isMulti ? palette.borders[slot] : palette.border;
-    const textColor = textOnFill(fill, palette.text);
+  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
     for (const rect of node.querySelectorAll(":scope > rect, rect.basic, g.classGroup > rect")) {
-      rect.setAttribute("fill", fill);
-      rect.setAttribute("stroke", stroke);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("fill", palette.surface);
+      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "6");
       rect.setAttribute("ry", "6");
     }
@@ -2291,17 +2278,11 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
   const isEr = root.classList.contains("erDiagram") || root.getAttribute("aria-roledescription") === "er" || !!doc.querySelector('.erDiagram, .entityBox, .relationshipLine, [id*="entity-"]');
   if (!isEr) return;
   root.classList.add("erDiagram");
-  const isMultiEr = palette.fills.length > 0;
-  const entities = Array.from(doc.querySelectorAll('g.node, [id*="entity-"]'));
-  for (let i = 0; i < entities.length; i++) {
-    const node = entities[i];
-    const slot = i % (palette.fills.length || 1);
-    const fill = isMultiEr ? palette.fills[slot] : palette.surface;
-    const stroke = isMultiEr ? palette.borders[slot] : palette.border;
+  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
     for (const rect of node.querySelectorAll(":scope > rect.entityBox, rect.basic")) {
-      rect.setAttribute("fill", fill);
-      rect.setAttribute("stroke", stroke);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("fill", palette.surface);
+      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "6");
       rect.setAttribute("ry", "6");
     }
@@ -2382,17 +2363,12 @@ function fixKanbanDiagram(doc, palette, dark) {
   const root = doc.documentElement;
   const isKanban = root.getAttribute("aria-roledescription") === "kanban" || !!doc.querySelector('g.cluster.section-1, g.kanban-section, .kanban-column, .kanban-item, [class*="kanban"]');
   if (!isKanban) return;
-  const isMultiKanban = palette.fills.length > 0;
-  const cols = Array.from(doc.querySelectorAll("g.cluster, g.kanban-column, g.kanban-section"));
-  for (let i = 0; i < cols.length; i++) {
-    const col = cols[i];
-    const slot = i % (palette.fills.length || 1);
-    const stroke = isMultiKanban ? palette.borders[slot] : palette.border;
+  for (const col of doc.querySelectorAll("g.cluster, g.kanban-column, g.kanban-section")) {
     const rect = col.querySelector(":scope > rect, rect");
     if (rect) {
       rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc"));
-      rect.setAttribute("stroke", stroke);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "8");
       rect.setAttribute("ry", "8");
     }
@@ -24279,40 +24255,32 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const isPeleSeq = root.classList.contains("pele-sequence") || root.getAttribute("aria-roledescription") === "sequence";
   const isPeleState = root.classList.contains("pele-state") || root.getAttribute("aria-roledescription") === "state";
   const isPeleTreemap = root.classList.contains("pele-treemap") || root.getAttribute("aria-roledescription") === "treemap";
-  const isMulti = settings.colorStyle === "multi" && palette.fills.length > 0;
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
   if (isPeleClass) {
-    const classNodes = Array.from(doc.querySelectorAll("g.pele-class"));
-    for (let i = 0; i < classNodes.length; i++) {
-      const node = classNodes[i];
-      const slot = i % (palette.fills.length || 1);
-      const classFill = isMulti ? palette.fills[slot] : palette.surface;
-      const classBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const node of Array.from(doc.querySelectorAll("g.pele-class"))) {
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", classFill);
-        rect.setAttribute("stroke", classBorder);
-        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-divider, path.pele-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", classBorder);
+        divider.setAttribute("stroke", palette.border);
         divider.setAttribute("stroke-width", "1.25px");
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        const titleColor = textOnFill(classFill, palette.text);
-        title.setAttribute("fill", titleColor);
+        title.setAttribute("fill", palette.text);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
       }
       for (const member of Array.from(node.querySelectorAll(".pele-member, .pele-attribute, .pele-method"))) {
-        const memColor = textOnFill(classFill, palette.text);
-        member.setAttribute("fill", memColor);
+        member.setAttribute("fill", palette.text);
         member.setAttribute("text-anchor", "start");
       }
     }
@@ -24322,40 +24290,33 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleEr) {
-    const entityNodes = Array.from(doc.querySelectorAll("g.pele-entity"));
-    for (let i = 0; i < entityNodes.length; i++) {
-      const node = entityNodes[i];
-      const slot = i % (palette.fills.length || 1);
-      const entityFill = isMulti ? palette.fills[slot] : palette.surface;
-      const entityBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const node of Array.from(doc.querySelectorAll("g.pele-entity"))) {
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", entityFill);
-        rect.setAttribute("stroke", entityBorder);
-        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-er-divider, path.pele-er-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", entityBorder);
+        divider.setAttribute("stroke", palette.border);
         divider.setAttribute("stroke-width", "1.25px");
       }
       const stripes = Array.from(node.querySelectorAll("g.pele-er-stripes rect"));
       for (let s = 0; s < stripes.length; s++) {
         const stripe = stripes[s];
-        stripe.setAttribute("fill", s % 2 === 0 ? entityFill : palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
+        stripe.setAttribute("fill", s % 2 === 0 ? palette.surface : palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        const titleColor = textOnFill(entityFill, palette.text);
-        title.setAttribute("fill", titleColor);
+        title.setAttribute("fill", palette.text);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
       }
       for (const text of Array.from(node.querySelectorAll(".pele-er-type, .pele-er-name"))) {
-        const attrColor = textOnFill(entityFill, palette.text);
-        text.setAttribute("fill", attrColor);
+        text.setAttribute("fill", palette.text);
         text.setAttribute("text-anchor", "start");
       }
       for (const key of Array.from(node.querySelectorAll(".pele-er-keys"))) {
@@ -24366,9 +24327,7 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleGantt) {
-    const taskGroups = Array.from(doc.querySelectorAll("g.pele-task"));
-    let normalTaskIndex = 0;
-    for (const taskGroup of taskGroups) {
+    for (const taskGroup of Array.from(doc.querySelectorAll("g.pele-task"))) {
       const isMilestone = taskGroup.classList.contains("pele-milestone") || !!taskGroup.querySelector("path");
       const isActive = taskGroup.classList.contains("pele-active") || !!taskGroup.querySelector(".pele-active");
       const text = taskGroup.querySelector("text.pele-label, text");
@@ -24399,22 +24358,11 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         rw2 = minWidth;
         rect.setAttribute("width", String(rw2));
       }
-      let barFill = palette.surface;
-      let barStroke = palette.border;
-      if (isActive) {
-        barFill = palette.accent;
-        barStroke = palette.accent;
-      } else if (isMulti) {
-        const slot = normalTaskIndex % palette.fills.length;
-        barFill = palette.fills[slot];
-        barStroke = palette.borders[slot];
-        normalTaskIndex++;
-      } else {
-        normalTaskIndex++;
-      }
+      const barFill = isActive ? palette.accent : palette.surface;
+      const barStroke = isActive ? palette.accent : palette.border;
       rect.setAttribute("fill", barFill);
       rect.setAttribute("stroke", barStroke);
-      rect.setAttribute("stroke-width", "1.5px");
+      rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
       const cx2 = rx2 + rw2 / 2;
@@ -24425,10 +24373,11 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       const textColor = textOnFill(barFill, palette.text);
       text.setAttribute("fill", textColor);
       text.setAttribute("font-weight", "600");
-      if (text.style) {
-        text.style.setProperty("fill", textColor, "important");
-        text.style.setProperty("color", textColor, "important");
-        text.style.setProperty("text-anchor", "middle", "important");
+      const el2 = text;
+      if (el2.style) {
+        el2.style.setProperty("fill", textColor, "important");
+        el2.style.setProperty("color", textColor, "important");
+        el2.style.setProperty("text-anchor", "middle", "important");
       }
     }
     for (const title of Array.from(doc.querySelectorAll(".pele-title, .pele-section-label, .pele-axis text"))) {
@@ -24436,28 +24385,23 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleReq) {
-    const reqNodes = Array.from(doc.querySelectorAll("g.pele-requirement, g.pele-element"));
-    for (let i = 0; i < reqNodes.length; i++) {
-      const node = reqNodes[i];
-      const slot = i % (palette.fills.length || 1);
-      const nodeFill = isMulti ? palette.fills[slot] : palette.surface;
-      const nodeBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const node of Array.from(doc.querySelectorAll("g.pele-requirement, g.pele-element"))) {
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", nodeFill);
-        rect.setAttribute("stroke", nodeBorder);
-        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-divider, path.pele-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", nodeBorder);
+        divider.setAttribute("stroke", palette.border);
         divider.setAttribute("stroke-width", "1.25px");
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        title.setAttribute("fill", textOnFill(nodeFill, palette.text));
+        title.setAttribute("fill", palette.text);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
       }
@@ -24471,22 +24415,18 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         field.setAttribute("text-anchor", "start");
       }
       for (const val of Array.from(node.querySelectorAll(".pele-value, .pele-value tspan"))) {
-        val.setAttribute("fill", textOnFill(nodeFill, palette.text));
+        val.setAttribute("fill", palette.text);
         val.setAttribute("text-anchor", "start");
       }
     }
   }
   if (isPeleKanban) {
-    const columns = Array.from(doc.querySelectorAll("g.pele-column, g.pele-cluster"));
-    for (let colIdx = 0; colIdx < columns.length; colIdx++) {
-      const col = columns[colIdx];
-      const slot = colIdx % (palette.fills.length || 1);
-      const colBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const col of Array.from(doc.querySelectorAll("g.pele-column, g.pele-cluster"))) {
       const rect = col.querySelector(":scope > rect");
       if (rect) {
         rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc"));
-        rect.setAttribute("stroke", colBorder);
-        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "8");
         rect.setAttribute("ry", "8");
       }
@@ -24496,7 +24436,7 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         title.setAttribute("font-weight", "bold");
       }
       for (const count of Array.from(col.querySelectorAll(".pele-count"))) {
-        count.setAttribute("fill", isMulti ? colBorder : dark ? "#94a3b8" : "#64748b");
+        count.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
         count.setAttribute("font-weight", "bold");
         count.setAttribute("text-anchor", "end");
       }
@@ -24504,7 +24444,7 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         const cardRect = card.querySelector("rect");
         if (cardRect) {
           cardRect.setAttribute("fill", palette.surface);
-          cardRect.setAttribute("stroke", isMulti ? colBorder : palette.border);
+          cardRect.setAttribute("stroke", palette.border);
           cardRect.setAttribute("stroke-width", "1.25px");
           cardRect.setAttribute("rx", "6");
           cardRect.setAttribute("ry", "6");
@@ -24523,60 +24463,45 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleSeq) {
-    const actors = Array.from(doc.querySelectorAll("g.pele-actor, g.pele-participant"));
-    for (let i = 0; i < actors.length; i++) {
-      const actor = actors[i];
-      const slot = i % (palette.fills.length || 1);
-      const actorFill = isMulti ? palette.fills[slot] : palette.surface;
-      const actorBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const actor of Array.from(doc.querySelectorAll("g.pele-actor, g.pele-participant"))) {
       for (const rect of Array.from(actor.querySelectorAll("rect"))) {
-        rect.setAttribute("fill", actorFill);
-        rect.setAttribute("stroke", actorBorder);
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "4");
         rect.setAttribute("ry", "4");
       }
       for (const text of Array.from(actor.querySelectorAll("text"))) {
-        text.setAttribute("fill", textOnFill(actorFill, palette.text));
+        text.setAttribute("fill", palette.text);
       }
     }
   }
   if (isPeleState) {
-    const states = Array.from(doc.querySelectorAll("g.pele-state-node, g.pele-node"));
-    for (let i = 0; i < states.length; i++) {
-      const state = states[i];
-      const slot = i % (palette.fills.length || 1);
-      const stateFill = isMulti ? palette.fills[slot] : palette.surface;
-      const stateBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const state of Array.from(doc.querySelectorAll("g.pele-state-node, g.pele-node"))) {
       const rect = state.querySelector("rect");
       if (rect) {
-        rect.setAttribute("fill", stateFill);
-        rect.setAttribute("stroke", stateBorder);
-        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
       }
       const text = state.querySelector("text");
       if (text) {
-        text.setAttribute("fill", textOnFill(stateFill, palette.text));
+        text.setAttribute("fill", palette.text);
       }
     }
   }
   if (isPeleTreemap) {
-    const leaves = Array.from(doc.querySelectorAll("g.pele-leaf, rect.pele-leaf"));
-    for (let i = 0; i < leaves.length; i++) {
-      const leaf = leaves[i];
-      const slot = i % (palette.fills.length || 1);
-      const leafFill = isMulti ? palette.fills[slot] : palette.surface;
-      const leafBorder = isMulti ? palette.borders[slot] : palette.border;
+    for (const leaf of Array.from(doc.querySelectorAll("g.pele-leaf, rect.pele-leaf"))) {
       const rect = leaf.tagName.toLowerCase() === "rect" ? leaf : leaf.querySelector("rect");
       if (rect) {
-        rect.setAttribute("fill", leafFill);
-        rect.setAttribute("stroke", leafBorder);
+        rect.setAttribute("fill", palette.surface);
+        rect.setAttribute("stroke", palette.border);
       }
       const text = leaf.tagName.toLowerCase() === "rect" ? null : leaf.querySelector("text");
       if (text) {
-        text.setAttribute("fill", textOnFill(leafFill, palette.text));
+        text.setAttribute("fill", palette.text);
       }
     }
   }

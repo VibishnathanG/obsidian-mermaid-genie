@@ -896,31 +896,25 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     }
   }
 
-  // Task bars: colorize with coordinated palette fills and borders
-  const isMulti = palette.fills.length > 0;
-  let taskBarIdx = 0;
+  // Task bars: clean, intuitive styling
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute('class') || '';
     if (cls.includes('done')) {
       rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#222f3e' : '#e2e8f0'));
       rect.setAttribute('stroke', palette.border);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     } else if (cls.includes('active')) {
       rect.setAttribute('fill', palette.accent);
       rect.setAttribute('stroke', palette.accent);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     } else if (!cls.includes('milestone')) {
-      const slot = taskBarIdx % (palette.fills.length || 1);
-      const fill = isMulti ? palette.fills[slot]! : palette.surface;
-      const stroke = isMulti ? palette.borders[slot]! : palette.border;
-      taskBarIdx++;
-      rect.setAttribute('fill', fill);
-      rect.setAttribute('stroke', stroke);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     }
@@ -1029,19 +1023,11 @@ export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: bool
   if (!isClass) return;
 
   // Class box containers (rects and path-based outer-paths)
-  const isMulti = palette.fills.length > 0;
-  const classNodes = Array.from(doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]'));
-  for (let i = 0; i < classNodes.length; i++) {
-    const node = classNodes[i]!;
-    const slot = i % (palette.fills.length || 1);
-    const fill = isMulti ? palette.fills[slot]! : palette.surface;
-    const stroke = isMulti ? palette.borders[slot]! : palette.border;
-    const textColor = textOnFill(fill, palette.text);
-
+  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
     for (const rect of node.querySelectorAll(':scope > rect, rect.basic, g.classGroup > rect')) {
-      rect.setAttribute('fill', fill);
-      rect.setAttribute('stroke', stroke);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
     }
@@ -1133,18 +1119,11 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
   root.classList.add('erDiagram');
 
   // Outer entity container boxes
-  const isMultiEr = palette.fills.length > 0;
-  const entities = Array.from(doc.querySelectorAll('g.node, [id*="entity-"]'));
-  for (let i = 0; i < entities.length; i++) {
-    const node = entities[i]!;
-    const slot = i % (palette.fills.length || 1);
-    const fill = isMultiEr ? palette.fills[slot]! : palette.surface;
-    const stroke = isMultiEr ? palette.borders[slot]! : palette.border;
-
+  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
     for (const rect of node.querySelectorAll(':scope > rect.entityBox, rect.basic')) {
-      rect.setAttribute('fill', fill);
-      rect.setAttribute('stroke', stroke);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('fill', palette.surface);
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
     }
@@ -1247,18 +1226,12 @@ export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: bool
   if (!isKanban) return;
 
   // Kanban column backgrounds
-  const isMultiKanban = palette.fills.length > 0;
-  const cols = Array.from(doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section'));
-  for (let i = 0; i < cols.length; i++) {
-    const col = cols[i]!;
-    const slot = i % (palette.fills.length || 1);
-    const stroke = isMultiKanban ? palette.borders[slot]! : palette.border;
-
+  for (const col of doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section')) {
     const rect = col.querySelector(':scope > rect, rect') as SVGRectElement | null;
     if (rect) {
       rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
-      rect.setAttribute('stroke', stroke);
-      rect.setAttribute('stroke-width', '1.5px');
+      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '8');
       rect.setAttribute('ry', '8');
     }

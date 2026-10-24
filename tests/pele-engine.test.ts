@@ -217,7 +217,7 @@ Vehicle <|-- ElectricCar`;
     // Divider paths must have fill none and valid stroke
     for (const divider of doc.querySelectorAll('.pele-divider, path.pele-divider')) {
       assert.equal(divider.getAttribute('fill'), 'none', 'Divider must not be filled with solid color');
-      assert.ok(palette.borders.includes(divider.getAttribute('stroke') || ''), 'Divider must have coordinated palette border stroke');
+      assert.equal(divider.getAttribute('stroke'), palette.border, 'Divider must have clean palette border stroke');
     }
 
     // Members must have start text-anchor
