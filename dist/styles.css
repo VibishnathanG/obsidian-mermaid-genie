@@ -814,8 +814,8 @@
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style).mpe-tracing .node.mpe-on-path :is(rect, polygon, circle, ellipse) {
   stroke: var(--mpe-highlight) !important;
-  stroke-width: 2.4px !important;
-  filter: drop-shadow(0 0 3px var(--mpe-highlight));
+  stroke-width: 2.2px !important;
+  filter: drop-shadow(0 0 2px var(--mpe-highlight)) !important;
 }
 
 /* Bold & Luminous Flow of Arrows on Active Highlight Path */
@@ -829,8 +829,8 @@
   path.pele-edge.mpe-on-path
 ) {
   stroke: var(--mpe-highlight) !important;
-  stroke-width: 3.2px !important;
-  filter: drop-shadow(0 0 3.5px var(--mpe-highlight)) !important;
+  stroke-width: 2.2px !important;
+  filter: drop-shadow(0 0 2px var(--mpe-highlight)) !important;
 }
 
 /* Arrowhead markers on active highlighted flow path */
@@ -843,7 +843,7 @@
 ) {
   fill: var(--mpe-highlight) !important;
   stroke: var(--mpe-highlight) !important;
-  filter: drop-shadow(0 0 3.5px var(--mpe-highlight)) !important;
+  filter: drop-shadow(0 0 2px var(--mpe-highlight)) !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .mpe-decision:focus-visible {
