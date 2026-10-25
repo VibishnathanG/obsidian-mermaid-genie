@@ -896,7 +896,9 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     }
   }
 
-  // Task bars: clean, intuitive styling
+  // Task bars: colorize with coordinated palette fills and borders
+  const isMulti = palette.fills.length > 0;
+  let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute('class') || '';
     if (cls.includes('done')) {
@@ -912,8 +914,12 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     } else if (!cls.includes('milestone')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      const slot = taskBarIdx % (palette.fills.length || 1);
+      const fill = isMulti ? palette.fills[slot]! : palette.surface;
+      const stroke = isMulti ? palette.borders[slot]! : palette.border;
+      taskBarIdx++;
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
@@ -1023,10 +1029,18 @@ export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: bool
   if (!isClass) return;
 
   // Class box containers (rects and path-based outer-paths)
-  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
+  const isMulti = palette.fills.length > 0;
+  const classNodes = Array.from(doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]'));
+  for (let i = 0; i < classNodes.length; i++) {
+    const node = classNodes[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMulti ? palette.fills[slot]! : palette.surface;
+    const stroke = isMulti ? palette.borders[slot]! : palette.border;
+    const textColor = textOnFill(fill, palette.text);
+
     for (const rect of node.querySelectorAll(':scope > rect, rect.basic, g.classGroup > rect')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
@@ -1036,18 +1050,18 @@ export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: bool
       const currentFill = path.getAttribute('fill');
       const currentStroke = path.getAttribute('stroke');
       if (currentStroke && currentStroke !== 'none' && currentStroke !== 'transparent') {
-        path.setAttribute('stroke', palette.border);
+        path.setAttribute('stroke', stroke);
         path.setAttribute('stroke-width', '1.5px');
       } else if (currentFill && currentFill !== 'none') {
-        path.setAttribute('fill', palette.surface);
+        path.setAttribute('fill', fill);
       }
     }
 
     // Class title
     for (const title of node.querySelectorAll('.label-group text, .classTitle, text.title, .label-group .nodeLabel, .label-group p')) {
-      title.setAttribute('fill', palette.text);
+      title.setAttribute('fill', textColor);
       if ((title as HTMLElement).style) {
-        (title as HTMLElement).style.color = palette.text;
+        (title as HTMLElement).style.color = textColor;
         (title as HTMLElement).style.fontWeight = '700';
       }
     }
@@ -1060,12 +1074,12 @@ export function fixClassDiagram(doc: Document, palette: PaletteData, _dark: bool
           divEl.style.textAlign = 'left';
           divEl.style.paddingLeft = '10px';
           divEl.style.paddingRight = '10px';
-          divEl.style.color = palette.text;
+          divEl.style.color = textColor;
           divEl.style.whiteSpace = 'nowrap';
         }
       }
       for (const text of group.querySelectorAll('text')) {
-        text.setAttribute('fill', palette.text);
+        text.setAttribute('fill', textColor);
         text.setAttribute('text-anchor', 'start');
       }
     }
@@ -1119,10 +1133,17 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
   root.classList.add('erDiagram');
 
   // Outer entity container boxes
-  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
+  const isMultiEr = palette.fills.length > 0;
+  const entities = Array.from(doc.querySelectorAll('g.node, [id*="entity-"]'));
+  for (let i = 0; i < entities.length; i++) {
+    const node = entities[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMultiEr ? palette.fills[slot]! : palette.surface;
+    const stroke = isMultiEr ? palette.borders[slot]! : palette.border;
+
     for (const rect of node.querySelectorAll(':scope > rect.entityBox, rect.basic')) {
-      rect.setAttribute('fill', palette.surface);
-      rect.setAttribute('stroke', palette.border);
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
       rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '6');
       rect.setAttribute('ry', '6');
@@ -1132,10 +1153,10 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
       const currentFill = path.getAttribute('fill');
       const currentStroke = path.getAttribute('stroke');
       if (currentStroke && currentStroke !== 'none' && currentStroke !== 'transparent') {
-        path.setAttribute('stroke', palette.border);
+        path.setAttribute('stroke', stroke);
         path.setAttribute('stroke-width', '1.5px');
       } else if (currentFill && currentFill !== 'none') {
-        path.setAttribute('fill', palette.surface);
+        path.setAttribute('fill', fill);
       }
     }
   }
@@ -1226,12 +1247,20 @@ export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: bool
   if (!isKanban) return;
 
   // Kanban column backgrounds
-  for (const col of doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section')) {
+  const isMultiKanban = palette.fills.length > 0;
+  const cols = Array.from(doc.querySelectorAll('g.cluster, g.kanban-column, g.kanban-section'));
+  for (let i = 0; i < cols.length; i++) {
+    const col = cols[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const stroke = isMultiKanban ? palette.borders[slot]! : palette.border;
+    const colFill = isMultiKanban ? palette.fills[slot]! : palette.surface;
+    const cardTextColor = textOnFill(colFill, palette.text);
+
     const rect = col.querySelector(':scope > rect, rect') as SVGRectElement | null;
     if (rect) {
       rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
-      rect.setAttribute('stroke', palette.border);
-      rect.setAttribute('stroke-width', '1.25px');
+      rect.setAttribute('stroke', stroke);
+      rect.setAttribute('stroke-width', '1.5px');
       rect.setAttribute('rx', '8');
       rect.setAttribute('ry', '8');
     }
@@ -1248,18 +1277,27 @@ export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: bool
     }
   }
 
-  // Kanban card nodes
-  for (const node of doc.querySelectorAll('.kanban-item, .kanban-ticket, g.items g.node, g.node[id*="task"]')) {
+  // Cards in Kanban board: apply coordinated palette fills, borders, and clean word wrapping
+  const cardNodes = Array.from(doc.querySelectorAll('.kanban-item, .kanban-ticket, g.items g.node, g.node[id*="task"], g.node:not(.cluster)'));
+  for (let idx = 0; idx < cardNodes.length; idx++) {
+    const node = cardNodes[idx]!;
+    // Skip clusters
+    if (node.classList.contains('cluster')) continue;
+
+    const slot = idx % (palette.fills.length || 1);
+    const colFill = isMultiKanban ? palette.fills[slot]! : palette.surface;
+    const stroke = isMultiKanban ? palette.borders[slot]! : palette.border;
+    const cardTextColor = textOnFill(colFill, palette.text);
+
     const cardRect = node.querySelector('rect.basic, rect') as SVGRectElement | null;
     if (cardRect) {
-      cardRect.setAttribute('fill', palette.surface);
-      cardRect.setAttribute('stroke', palette.border);
-      cardRect.setAttribute('stroke-width', '1.2px');
+      cardRect.setAttribute('fill', colFill);
+      cardRect.setAttribute('stroke', stroke);
+      cardRect.setAttribute('stroke-width', '1.25px');
       cardRect.setAttribute('rx', '6');
       cardRect.setAttribute('ry', '6');
     }
 
-    // Card text word-wrap: critical fix! Mermaid's hardcoded white-space: nowrap causes card text to spill into adjacent columns.
     for (const foDiv of node.querySelectorAll('foreignObject div, .nodeLabel, p, span')) {
       const divEl = foDiv as HTMLElement;
       if (divEl.style) {
@@ -1267,13 +1305,13 @@ export function fixKanbanDiagram(doc: Document, palette: PaletteData, dark: bool
         divEl.style.wordBreak = 'break-word';
         divEl.style.textAlign = 'left';
         divEl.style.padding = '4px 8px';
-        divEl.style.color = palette.text;
+        divEl.style.color = cardTextColor;
         divEl.style.fontSize = '12.5px';
         divEl.style.lineHeight = '1.4';
       }
     }
     for (const text of node.querySelectorAll('text')) {
-      text.setAttribute('fill', palette.text);
+      text.setAttribute('fill', cardTextColor);
     }
   }
 }
@@ -1364,6 +1402,52 @@ export function fixTreemapDiagram(doc: Document, palette: PaletteData, dark: boo
       }
     }
   });
+}
+
+/**
+ * Enhances Packet diagrams with coordinated palette fills for packet fields,
+ * high-contrast typography, and crisp field boundaries.
+ */
+export function fixPacketDiagram(doc: Document, palette: PaletteData, _dark: boolean): void {
+  const root = doc.documentElement;
+  const isPacket = root.getAttribute('aria-roledescription') === 'packet' ||
+    root.classList.contains('packet') ||
+    !!doc.querySelector('.packetBlock, g.packet-field, .packet-field, g[class*="packet"]');
+  if (!isPacket) return;
+
+  const fields = Array.from(doc.querySelectorAll('g.packetBlock, g.packet-field, .packet-field, g[class*="packet"] > g, .packet rect'));
+  for (let i = 0; i < fields.length; i++) {
+    const el = fields[i]!;
+    const slot = i % (palette.fills.length || 1);
+    const fill = palette.fills[slot] ?? palette.surface;
+    const stroke = palette.borders[slot] ?? palette.border;
+    const textColor = textOnFill(fill, palette.text);
+
+    const rect = el.tagName.toLowerCase() === 'rect' ? (el as SVGRectElement) : el.querySelector('rect');
+    if (rect) {
+      rect.setAttribute('fill', fill);
+      rect.setAttribute('stroke', stroke);
+      rect.setAttribute('stroke-width', '1.25px');
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('ry', '4');
+      if (rect.style) {
+        rect.style.fill = fill;
+        rect.style.stroke = stroke;
+      }
+    }
+
+    const parentG = el.tagName.toLowerCase() === 'g' ? el : el.parentElement;
+    if (parentG) {
+      for (const text of parentG.querySelectorAll('text')) {
+        text.setAttribute('fill', textColor);
+        const textEl = text as unknown as HTMLElement;
+        if (textEl.style) {
+          textEl.style.setProperty('fill', textColor, 'important');
+          textEl.style.setProperty('color', textColor, 'important');
+        }
+      }
+    }
+  }
 }
 
 export function styleSvg(
@@ -1914,6 +1998,7 @@ export function styleSvg(
   fixEntityRelationshipDiagram(doc, palette, dark);
   fixKanbanDiagram(doc, palette, dark);
   fixTreemapDiagram(doc, palette, dark);
+  fixPacketDiagram(doc, palette, dark);
 
   // Mark SVG as enhanced and set custom properties
   root.classList?.add?.('mfe-enhanced', 'mermaid-genie-diagram');

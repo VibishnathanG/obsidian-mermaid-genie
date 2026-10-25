@@ -42,6 +42,23 @@ export function renderWithPele(options: PeleRenderOptions): string | null {
   }
 }
 
+function setNodeVars(el: Element, fill: string, stroke: string, text: string): void {
+  const h = el as unknown as HTMLElement;
+  if (h && h.style) {
+    h.style.setProperty('--node-fill', fill);
+    h.style.setProperty('--node-border', stroke);
+    h.style.setProperty('--node-text', text);
+  }
+}
+
+function setElStyle(el: Element, prop: string, val: string, important = false): void {
+  const h = el as unknown as HTMLElement;
+  if (h && h.style) {
+    if (important) h.style.setProperty(prop, val, 'important');
+    else h.style.setProperty(prop, val);
+  }
+}
+
 /**
  * Enhances Pele's raw SVG with Mermaid Genie cosmetics, including:
  * - Direct mapping of Genie's active theme palette to Pele's CSS variables
@@ -158,40 +175,60 @@ export function enhancePeleSvg(
   const isPeleSeq = root.classList.contains('pele-sequence') || root.getAttribute('aria-roledescription') === 'sequence';
   const isPeleState = root.classList.contains('pele-state') || root.getAttribute('aria-roledescription') === 'state';
   const isPeleTreemap = root.classList.contains('pele-treemap') || root.getAttribute('aria-roledescription') === 'treemap';
+  const isPelePacket = root.classList.contains('pele-packet') || root.getAttribute('aria-roledescription') === 'packet';
+  const isPeleBlock = root.classList.contains('pele-block') || root.getAttribute('aria-roledescription') === 'block';
+  const isPeleC4 = root.classList.contains('pele-c4') || root.getAttribute('aria-roledescription') === 'c4';
 
   // 1. Flowcharts: Coordinated branch palette
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
 
-  // 2. Class Diagrams: Clean, intuitive class card fills, borders, and dividers
+  // 2. Class Diagrams: Coordinated class card fills, borders, and dividers
   if (isPeleClass) {
-    for (const node of Array.from(doc.querySelectorAll('g.pele-class'))) {
-      const rect = node.querySelector(':scope > rect');
+    const classes = Array.from(doc.querySelectorAll('g.pele-class'));
+    for (let i = 0; i < classes.length; i++) {
+      const node = classes[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(node, fill, stroke, textColor);
+
+      const rect = node.querySelector(':scope > rect') as SVGRectElement | null;
       if (rect) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
         rect.setAttribute('stroke-width', '1.25px');
         rect.setAttribute('rx', '6');
         rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
 
       for (const divider of Array.from(node.querySelectorAll('.pele-divider, path.pele-divider'))) {
         divider.setAttribute('fill', 'none');
-        divider.setAttribute('stroke', palette.border);
+        divider.setAttribute('stroke', stroke);
         divider.setAttribute('stroke-width', '1.25px');
+        setElStyle(divider, 'fill', 'none', true);
+        setElStyle(divider, 'stroke', stroke, true);
       }
 
       const title = node.querySelector(':scope > text.pele-label');
       if (title) {
-        title.setAttribute('fill', palette.text);
+        title.setAttribute('fill', textColor);
         title.setAttribute('text-anchor', 'middle');
         title.setAttribute('font-weight', 'bold');
+        setElStyle(title, 'fill', textColor, true);
       }
 
       for (const member of Array.from(node.querySelectorAll('.pele-member, .pele-attribute, .pele-method'))) {
-        member.setAttribute('fill', palette.text);
+        member.setAttribute('fill', textColor);
         member.setAttribute('text-anchor', 'start');
+        setElStyle(member, 'fill', textColor, true);
       }
     }
 
@@ -201,52 +238,72 @@ export function enhancePeleSvg(
     }
   }
 
-  // 3. ER Diagrams: Clean, intuitive entity fills, borders, and dividers
+  // 3. ER Diagrams: Coordinated entity fills, borders, and dividers
   if (isPeleEr) {
-    for (const node of Array.from(doc.querySelectorAll('g.pele-entity'))) {
-      const rect = node.querySelector(':scope > rect');
+    const entities = Array.from(doc.querySelectorAll('g.pele-entity'));
+    for (let i = 0; i < entities.length; i++) {
+      const node = entities[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(node, fill, stroke, textColor);
+
+      const rect = node.querySelector(':scope > rect') as SVGRectElement | null;
       if (rect) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
         rect.setAttribute('stroke-width', '1.25px');
         rect.setAttribute('rx', '6');
         rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
 
       for (const divider of Array.from(node.querySelectorAll('.pele-er-divider, path.pele-er-divider'))) {
         divider.setAttribute('fill', 'none');
-        divider.setAttribute('stroke', palette.border);
+        divider.setAttribute('stroke', stroke);
         divider.setAttribute('stroke-width', '1.25px');
+        setElStyle(divider, 'fill', 'none', true);
+        setElStyle(divider, 'stroke', stroke, true);
       }
 
       const stripes = Array.from(node.querySelectorAll('g.pele-er-stripes rect'));
       for (let s = 0; s < stripes.length; s++) {
         const stripe = stripes[s]!;
-        stripe.setAttribute('fill', s % 2 === 0 ? palette.surface : (palette.clusterBkg ?? (dark ? '#1d2838' : '#f1f5f9')));
+        stripe.setAttribute('fill', fill);
+        stripe.setAttribute('fill-opacity', s % 2 === 0 ? '1' : '0.82');
       }
 
       const title = node.querySelector(':scope > text.pele-label');
       if (title) {
-        title.setAttribute('fill', palette.text);
+        title.setAttribute('fill', textColor);
         title.setAttribute('text-anchor', 'middle');
         title.setAttribute('font-weight', 'bold');
+        setElStyle(title, 'fill', textColor, true);
       }
 
       for (const text of Array.from(node.querySelectorAll('.pele-er-type, .pele-er-name'))) {
-        text.setAttribute('fill', palette.text);
+        text.setAttribute('fill', textColor);
         text.setAttribute('text-anchor', 'start');
+        setElStyle(text, 'fill', textColor, true);
       }
 
       for (const key of Array.from(node.querySelectorAll('.pele-er-keys'))) {
         key.setAttribute('fill', palette.accent);
         key.setAttribute('text-anchor', 'start');
         key.setAttribute('font-weight', 'bold');
+        setElStyle(key, 'fill', palette.accent, true);
       }
     }
   }
 
-  // 4. Gantt Charts: Clean, intuitive task bars with guaranteed WCAG text contrast
+  // 4. Gantt Charts: Coordinated task bars with guaranteed WCAG text contrast
   if (isPeleGantt) {
+    let taskBarIdx = 0;
     for (const taskGroup of Array.from(doc.querySelectorAll('g.pele-task'))) {
       const isMilestone = taskGroup.classList.contains('pele-milestone') || !!taskGroup.querySelector('path');
       const isActive = taskGroup.classList.contains('pele-active') || !!taskGroup.querySelector('.pele-active');
@@ -260,15 +317,13 @@ export function enhancePeleSvg(
         }
         if (text) {
           text.setAttribute('fill', palette.text);
-          if ((text as HTMLElement).style) {
-            (text as HTMLElement).style.setProperty('fill', palette.text, 'important');
-            (text as HTMLElement).style.setProperty('color', palette.text, 'important');
-          }
+          setElStyle(text, 'fill', palette.text, true);
+          setElStyle(text, 'color', palette.text, true);
         }
         continue;
       }
 
-      const rect = taskGroup.querySelector('rect');
+      const rect = taskGroup.querySelector('rect') as SVGRectElement | null;
       if (!rect || !text) continue;
 
       const rx = parseFloat(rect.getAttribute('x') || '0');
@@ -284,15 +339,22 @@ export function enhancePeleSvg(
         rect.setAttribute('width', String(rw));
       }
 
-      // Clean intuitive bar fill & stroke: active tasks use accent, normal tasks use clean surface
-      const barFill = isActive ? palette.accent : palette.surface;
-      const barStroke = isActive ? palette.accent : palette.border;
+      const slot = taskBarIdx % (palette.fills.length || 1);
+      taskBarIdx++;
+
+      const barFill = isActive ? palette.accent : (palette.fills[slot] ?? palette.surface);
+      const barStroke = isActive ? palette.accent : (palette.borders[slot] ?? palette.border);
+      const textColor = textOnFill(barFill, palette.text);
 
       rect.setAttribute('fill', barFill);
       rect.setAttribute('stroke', barStroke);
       rect.setAttribute('stroke-width', '1.25px');
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
+      if (rect.style) {
+        rect.style.fill = barFill;
+        rect.style.stroke = barStroke;
+      }
 
       // Enclose text inside task box with guaranteed readable contrast
       const cx = rx + rw / 2;
@@ -301,15 +363,11 @@ export function enhancePeleSvg(
       text.setAttribute('y', String(cy));
       text.setAttribute('text-anchor', 'middle');
 
-      const textColor = textOnFill(barFill, palette.text);
       text.setAttribute('fill', textColor);
       text.setAttribute('font-weight', '600');
-      const el = text as unknown as SVGElement;
-      if (el.style) {
-        el.style.setProperty('fill', textColor, 'important');
-        el.style.setProperty('color', textColor, 'important');
-        el.style.setProperty('text-anchor', 'middle', 'important');
-      }
+      setElStyle(text, 'fill', textColor, true);
+      setElStyle(text, 'color', textColor, true);
+      setElStyle(text, 'text-anchor', 'middle', true);
     }
 
     for (const title of Array.from(doc.querySelectorAll('.pele-title, .pele-section-label, .pele-axis text'))) {
@@ -317,59 +375,85 @@ export function enhancePeleSvg(
     }
   }
 
-  // 5. Requirement Diagrams: Clean, intuitive requirement & element node fills
+  // 5. Requirement Diagrams: Coordinated requirement & element node fills
   if (isPeleReq) {
-    for (const node of Array.from(doc.querySelectorAll('g.pele-requirement, g.pele-element'))) {
-      const rect = node.querySelector(':scope > rect');
+    const reqNodes = Array.from(doc.querySelectorAll('g.pele-requirement, g.pele-element'));
+    for (let i = 0; i < reqNodes.length; i++) {
+      const node = reqNodes[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(node, fill, stroke, textColor);
+
+      const rect = node.querySelector(':scope > rect') as SVGRectElement | null;
       if (rect) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
         rect.setAttribute('stroke-width', '1.25px');
         rect.setAttribute('rx', '6');
         rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
 
       for (const divider of Array.from(node.querySelectorAll('.pele-divider, path.pele-divider'))) {
         divider.setAttribute('fill', 'none');
-        divider.setAttribute('stroke', palette.border);
+        divider.setAttribute('stroke', stroke);
         divider.setAttribute('stroke-width', '1.25px');
+        setElStyle(divider, 'fill', 'none', true);
+        setElStyle(divider, 'stroke', stroke, true);
       }
 
       const title = node.querySelector(':scope > text.pele-label');
       if (title) {
-        title.setAttribute('fill', palette.text);
+        title.setAttribute('fill', textColor);
         title.setAttribute('text-anchor', 'middle');
         title.setAttribute('font-weight', 'bold');
+        setElStyle(title, 'fill', textColor, true);
       }
 
       const stereo = node.querySelector(':scope > text.pele-stereotype');
       if (stereo) {
-        stereo.setAttribute('fill', dark ? '#94a3b8' : '#64748b');
+        stereo.setAttribute('fill', textColor);
         stereo.setAttribute('text-anchor', 'middle');
       }
 
       for (const field of Array.from(node.querySelectorAll('.pele-field, .pele-field tspan'))) {
-        field.setAttribute('fill', dark ? '#94a3b8' : '#64748b');
+        field.setAttribute('fill', textColor);
         field.setAttribute('text-anchor', 'start');
       }
 
       for (const val of Array.from(node.querySelectorAll('.pele-value, .pele-value tspan'))) {
-        val.setAttribute('fill', palette.text);
+        val.setAttribute('fill', textColor);
         val.setAttribute('text-anchor', 'start');
       }
     }
   }
 
-  // 6. Kanban Boards: Clean column containers & start-aligned card text
+  // 6. Kanban Boards: Coordinated column containers & start-aligned card text
   if (isPeleKanban) {
-    for (const col of Array.from(doc.querySelectorAll('g.pele-column, g.pele-cluster'))) {
-      const rect = col.querySelector(':scope > rect');
+    const cols = Array.from(doc.querySelectorAll('g.pele-column, g.pele-cluster'));
+    for (let i = 0; i < cols.length; i++) {
+      const col = cols[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const colFill = palette.fills[slot] ?? palette.surface;
+      const colBorder = palette.borders[slot] ?? palette.border;
+      const cardTextColor = textOnFill(colFill, palette.text);
+
+      const rect = col.querySelector(':scope > rect') as SVGRectElement | null;
       if (rect) {
         rect.setAttribute('fill', palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc'));
-        rect.setAttribute('stroke', palette.border);
-        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('stroke', colBorder);
+        rect.setAttribute('stroke-width', '1.5px');
         rect.setAttribute('rx', '8');
         rect.setAttribute('ry', '8');
+        if (rect.style) {
+          rect.style.stroke = colBorder;
+        }
       }
 
       for (const title of Array.from(col.querySelectorAll('.pele-cluster-label'))) {
@@ -384,75 +468,216 @@ export function enhancePeleSvg(
         count.setAttribute('text-anchor', 'end');
       }
 
-      // Card nodes in this column: strictly start-aligned inside card box with 10px margin
+      // Card nodes in this column: styled with column's coordinated color and strictly start-aligned inside card box
       for (const card of Array.from(col.querySelectorAll('g.pele-card, g.pele-node'))) {
-        const cardRect = card.querySelector('rect');
+        setNodeVars(card, colFill, colBorder, cardTextColor);
+
+        const cardRect = card.querySelector('rect') as SVGRectElement | null;
         if (cardRect) {
-          cardRect.setAttribute('fill', palette.surface);
-          cardRect.setAttribute('stroke', palette.border);
+          cardRect.setAttribute('fill', colFill);
+          cardRect.setAttribute('stroke', colBorder);
           cardRect.setAttribute('stroke-width', '1.25px');
           cardRect.setAttribute('rx', '6');
           cardRect.setAttribute('ry', '6');
+          if (cardRect.style) {
+            cardRect.style.fill = colFill;
+            cardRect.style.stroke = colBorder;
+          }
         }
         for (const cardText of Array.from(card.querySelectorAll('text'))) {
-          cardText.setAttribute('fill', palette.text);
+          cardText.setAttribute('fill', cardTextColor);
           cardText.setAttribute('text-anchor', 'start');
-          const el = cardText as unknown as SVGElement;
-          if (el.style) {
-            el.style.setProperty('text-anchor', 'start', 'important');
-            el.style.setProperty('text-align', 'left', 'important');
-            el.style.setProperty('fill', palette.text, 'important');
-          }
+          setElStyle(cardText, 'text-anchor', 'start', true);
+          setElStyle(cardText, 'text-align', 'left', true);
+          setElStyle(cardText, 'fill', cardTextColor, true);
+          setElStyle(cardText, 'color', cardTextColor, true);
         }
       }
     }
   }
 
-  // 7. Sequence Diagrams: Clean participant boxes
+  // 7. Sequence Diagrams: Coordinated participant boxes
   if (isPeleSeq) {
-    for (const actor of Array.from(doc.querySelectorAll('g.pele-actor, g.pele-participant'))) {
-      for (const rect of Array.from(actor.querySelectorAll('rect'))) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+    const actors = Array.from(doc.querySelectorAll('g.pele-actor, g.pele-participant'));
+    for (let i = 0; i < actors.length; i++) {
+      const actor = actors[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(actor, fill, stroke, textColor);
+
+      for (const rect of Array.from(actor.querySelectorAll('rect')) as SVGRectElement[]) {
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
         rect.setAttribute('stroke-width', '1.25px');
         rect.setAttribute('rx', '4');
         rect.setAttribute('ry', '4');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       for (const text of Array.from(actor.querySelectorAll('text'))) {
-        text.setAttribute('fill', palette.text);
+        text.setAttribute('fill', textColor);
+        setElStyle(text, 'fill', textColor, true);
       }
     }
   }
 
-  // 8. State Diagrams: Clean state boxes
+  // 8. State Diagrams: Coordinated state boxes
   if (isPeleState) {
-    for (const state of Array.from(doc.querySelectorAll('g.pele-state-node, g.pele-node'))) {
-      const rect = state.querySelector('rect');
+    const states = Array.from(doc.querySelectorAll('g.pele-state-node, g.pele-node'));
+    for (let i = 0; i < states.length; i++) {
+      const state = states[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(state, fill, stroke, textColor);
+
+      const rect = state.querySelector('rect') as SVGRectElement | null;
       if (rect) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
         rect.setAttribute('stroke-width', '1.25px');
         rect.setAttribute('rx', '6');
         rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       const text = state.querySelector('text');
       if (text) {
-        text.setAttribute('fill', palette.text);
+        text.setAttribute('fill', textColor);
+        setElStyle(text, 'fill', textColor, true);
       }
     }
   }
 
-  // 9. Treemap Diagrams: Clean leaf node fills & borders
+  // 9. Treemap Diagrams: Coordinated leaf node fills & borders
   if (isPeleTreemap) {
-    for (const leaf of Array.from(doc.querySelectorAll('g.pele-leaf, rect.pele-leaf'))) {
-      const rect = leaf.tagName.toLowerCase() === 'rect' ? (leaf as SVGRectElement) : leaf.querySelector('rect');
+    const leaves = Array.from(doc.querySelectorAll('g.pele-leaf, rect.pele-leaf'));
+    for (let i = 0; i < leaves.length; i++) {
+      const leaf = leaves[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      const rect = (leaf.tagName.toLowerCase() === 'rect' ? leaf : leaf.querySelector('rect')) as SVGRectElement | null;
       if (rect) {
-        rect.setAttribute('fill', palette.surface);
-        rect.setAttribute('stroke', palette.border);
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       const text = leaf.tagName.toLowerCase() === 'rect' ? null : leaf.querySelector('text');
       if (text) {
-        text.setAttribute('fill', palette.text);
+        text.setAttribute('fill', textColor);
+        setElStyle(text, 'fill', textColor, true);
+      }
+    }
+  }
+
+  // 10. Packet Diagrams: Coordinated packet field fills & borders
+  if (isPelePacket) {
+    const fields = Array.from(doc.querySelectorAll('g.pele-packet-fields > g.pele-node'));
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(field, fill, stroke, textColor);
+
+      const rect = field.querySelector('rect') as SVGRectElement | null;
+      if (rect) {
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '4');
+        rect.setAttribute('ry', '4');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+
+      const text = field.querySelector('text');
+      if (text) {
+        text.setAttribute('fill', textColor);
+        text.setAttribute('font-weight', '600');
+        setElStyle(text, 'fill', textColor, true);
+        setElStyle(text, 'color', textColor, true);
+      }
+    }
+  }
+
+  // 11. Block Diagrams: Coordinated block node fills & borders
+  if (isPeleBlock) {
+    const blocks = Array.from(doc.querySelectorAll('g.pele-nodes > g.pele-node'));
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(b, fill, stroke, textColor);
+
+      const rect = b.querySelector('rect') as SVGRectElement | null;
+      if (rect) {
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
+        rect.setAttribute('stroke-width', '1.25px');
+        rect.setAttribute('rx', '6');
+        rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+      const text = b.querySelector('text.pele-label, text');
+      if (text) {
+        text.setAttribute('fill', textColor);
+        setElStyle(text, 'fill', textColor, true);
+      }
+    }
+  }
+
+  // 12. C4 Architecture Diagrams: Coordinated person & system fills
+  if (isPeleC4) {
+    const nodes = Array.from(doc.querySelectorAll('g.pele-nodes > g.pele-node'));
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]!;
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      setNodeVars(node, fill, stroke, textColor);
+
+      for (const shape of Array.from(node.querySelectorAll('rect, circle')) as SVGElement[]) {
+        shape.setAttribute('fill', fill);
+        shape.setAttribute('stroke', stroke);
+        if (shape.style) {
+          shape.style.fill = fill;
+          shape.style.stroke = stroke;
+        }
+      }
+      for (const text of Array.from(node.querySelectorAll('text, tspan'))) {
+        if (text.classList.contains('pele-c4-type') || text.classList.contains('pele-c4-descr')) {
+          text.setAttribute('fill', dark ? '#cbd5e1' : '#475569');
+        } else {
+          text.setAttribute('fill', textColor);
+        }
       }
     }
   }

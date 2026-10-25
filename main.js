@@ -2099,6 +2099,8 @@ function fixGanttChart(doc, palette, dark) {
       title.style.fontWeight = "700";
     }
   }
+  const isMulti = palette.fills.length > 0;
+  let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute("class") || "";
     if (cls.includes("done")) {
@@ -2114,8 +2116,12 @@ function fixGanttChart(doc, palette, dark) {
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
     } else if (!cls.includes("milestone")) {
-      rect.setAttribute("fill", palette.surface);
-      rect.setAttribute("stroke", palette.border);
+      const slot = taskBarIdx % (palette.fills.length || 1);
+      const fill = isMulti ? palette.fills[slot] : palette.surface;
+      const stroke = isMulti ? palette.borders[slot] : palette.border;
+      taskBarIdx++;
+      rect.setAttribute("fill", fill);
+      rect.setAttribute("stroke", stroke);
       rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
@@ -2204,10 +2210,17 @@ function fixClassDiagram(doc, palette, _dark) {
   const root = doc.documentElement;
   const isClass = root.classList.contains("classDiagram") || root.getAttribute("aria-roledescription") === "classDiagram" || !!doc.querySelector('.classDiagram, g.classGroup, .classTitle, .classLabel, [id*="classId"]');
   if (!isClass) return;
-  for (const node of doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]')) {
+  const isMulti = palette.fills.length > 0;
+  const classNodes = Array.from(doc.querySelectorAll('.classDiagram g.node, g.classGroup, [id*="classId"]'));
+  for (let i = 0; i < classNodes.length; i++) {
+    const node = classNodes[i];
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMulti ? palette.fills[slot] : palette.surface;
+    const stroke = isMulti ? palette.borders[slot] : palette.border;
+    const textColor = textOnFill(fill, palette.text);
     for (const rect of node.querySelectorAll(":scope > rect, rect.basic, g.classGroup > rect")) {
-      rect.setAttribute("fill", palette.surface);
-      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("fill", fill);
+      rect.setAttribute("stroke", stroke);
       rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "6");
       rect.setAttribute("ry", "6");
@@ -2216,16 +2229,16 @@ function fixClassDiagram(doc, palette, _dark) {
       const currentFill = path.getAttribute("fill");
       const currentStroke = path.getAttribute("stroke");
       if (currentStroke && currentStroke !== "none" && currentStroke !== "transparent") {
-        path.setAttribute("stroke", palette.border);
+        path.setAttribute("stroke", stroke);
         path.setAttribute("stroke-width", "1.5px");
       } else if (currentFill && currentFill !== "none") {
-        path.setAttribute("fill", palette.surface);
+        path.setAttribute("fill", fill);
       }
     }
     for (const title of node.querySelectorAll(".label-group text, .classTitle, text.title, .label-group .nodeLabel, .label-group p")) {
-      title.setAttribute("fill", palette.text);
+      title.setAttribute("fill", textColor);
       if (title.style) {
-        title.style.color = palette.text;
+        title.style.color = textColor;
         title.style.fontWeight = "700";
       }
     }
@@ -2236,12 +2249,12 @@ function fixClassDiagram(doc, palette, _dark) {
           divEl.style.textAlign = "left";
           divEl.style.paddingLeft = "10px";
           divEl.style.paddingRight = "10px";
-          divEl.style.color = palette.text;
+          divEl.style.color = textColor;
           divEl.style.whiteSpace = "nowrap";
         }
       }
       for (const text of group.querySelectorAll("text")) {
-        text.setAttribute("fill", palette.text);
+        text.setAttribute("fill", textColor);
         text.setAttribute("text-anchor", "start");
       }
     }
@@ -2278,10 +2291,16 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
   const isEr = root.classList.contains("erDiagram") || root.getAttribute("aria-roledescription") === "er" || !!doc.querySelector('.erDiagram, .entityBox, .relationshipLine, [id*="entity-"]');
   if (!isEr) return;
   root.classList.add("erDiagram");
-  for (const node of doc.querySelectorAll('g.node, [id*="entity-"]')) {
+  const isMultiEr = palette.fills.length > 0;
+  const entities = Array.from(doc.querySelectorAll('g.node, [id*="entity-"]'));
+  for (let i = 0; i < entities.length; i++) {
+    const node = entities[i];
+    const slot = i % (palette.fills.length || 1);
+    const fill = isMultiEr ? palette.fills[slot] : palette.surface;
+    const stroke = isMultiEr ? palette.borders[slot] : palette.border;
     for (const rect of node.querySelectorAll(":scope > rect.entityBox, rect.basic")) {
-      rect.setAttribute("fill", palette.surface);
-      rect.setAttribute("stroke", palette.border);
+      rect.setAttribute("fill", fill);
+      rect.setAttribute("stroke", stroke);
       rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "6");
       rect.setAttribute("ry", "6");
@@ -2290,10 +2309,10 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
       const currentFill = path.getAttribute("fill");
       const currentStroke = path.getAttribute("stroke");
       if (currentStroke && currentStroke !== "none" && currentStroke !== "transparent") {
-        path.setAttribute("stroke", palette.border);
+        path.setAttribute("stroke", stroke);
         path.setAttribute("stroke-width", "1.5px");
       } else if (currentFill && currentFill !== "none") {
-        path.setAttribute("fill", palette.surface);
+        path.setAttribute("fill", fill);
       }
     }
   }
@@ -2363,12 +2382,19 @@ function fixKanbanDiagram(doc, palette, dark) {
   const root = doc.documentElement;
   const isKanban = root.getAttribute("aria-roledescription") === "kanban" || !!doc.querySelector('g.cluster.section-1, g.kanban-section, .kanban-column, .kanban-item, [class*="kanban"]');
   if (!isKanban) return;
-  for (const col of doc.querySelectorAll("g.cluster, g.kanban-column, g.kanban-section")) {
+  const isMultiKanban = palette.fills.length > 0;
+  const cols = Array.from(doc.querySelectorAll("g.cluster, g.kanban-column, g.kanban-section"));
+  for (let i = 0; i < cols.length; i++) {
+    const col = cols[i];
+    const slot = i % (palette.fills.length || 1);
+    const stroke = isMultiKanban ? palette.borders[slot] : palette.border;
+    const colFill = isMultiKanban ? palette.fills[slot] : palette.surface;
+    const cardTextColor = textOnFill(colFill, palette.text);
     const rect = col.querySelector(":scope > rect, rect");
     if (rect) {
       rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc"));
-      rect.setAttribute("stroke", palette.border);
-      rect.setAttribute("stroke-width", "1.25px");
+      rect.setAttribute("stroke", stroke);
+      rect.setAttribute("stroke-width", "1.5px");
       rect.setAttribute("rx", "8");
       rect.setAttribute("ry", "8");
     }
@@ -2382,12 +2408,19 @@ function fixKanbanDiagram(doc, palette, dark) {
       }
     }
   }
-  for (const node of doc.querySelectorAll('.kanban-item, .kanban-ticket, g.items g.node, g.node[id*="task"]')) {
+  const cardNodes = Array.from(doc.querySelectorAll('.kanban-item, .kanban-ticket, g.items g.node, g.node[id*="task"], g.node:not(.cluster)'));
+  for (let idx = 0; idx < cardNodes.length; idx++) {
+    const node = cardNodes[idx];
+    if (node.classList.contains("cluster")) continue;
+    const slot = idx % (palette.fills.length || 1);
+    const colFill = isMultiKanban ? palette.fills[slot] : palette.surface;
+    const stroke = isMultiKanban ? palette.borders[slot] : palette.border;
+    const cardTextColor = textOnFill(colFill, palette.text);
     const cardRect = node.querySelector("rect.basic, rect");
     if (cardRect) {
-      cardRect.setAttribute("fill", palette.surface);
-      cardRect.setAttribute("stroke", palette.border);
-      cardRect.setAttribute("stroke-width", "1.2px");
+      cardRect.setAttribute("fill", colFill);
+      cardRect.setAttribute("stroke", stroke);
+      cardRect.setAttribute("stroke-width", "1.25px");
       cardRect.setAttribute("rx", "6");
       cardRect.setAttribute("ry", "6");
     }
@@ -2398,13 +2431,13 @@ function fixKanbanDiagram(doc, palette, dark) {
         divEl.style.wordBreak = "break-word";
         divEl.style.textAlign = "left";
         divEl.style.padding = "4px 8px";
-        divEl.style.color = palette.text;
+        divEl.style.color = cardTextColor;
         divEl.style.fontSize = "12.5px";
         divEl.style.lineHeight = "1.4";
       }
     }
     for (const text of node.querySelectorAll("text")) {
-      text.setAttribute("fill", palette.text);
+      text.setAttribute("fill", cardTextColor);
     }
   }
 }
@@ -2477,6 +2510,42 @@ function fixTreemapDiagram(doc, palette, dark) {
       }
     }
   });
+}
+function fixPacketDiagram(doc, palette, _dark) {
+  const root = doc.documentElement;
+  const isPacket = root.getAttribute("aria-roledescription") === "packet" || root.classList.contains("packet") || !!doc.querySelector('.packetBlock, g.packet-field, .packet-field, g[class*="packet"]');
+  if (!isPacket) return;
+  const fields = Array.from(doc.querySelectorAll('g.packetBlock, g.packet-field, .packet-field, g[class*="packet"] > g, .packet rect'));
+  for (let i = 0; i < fields.length; i++) {
+    const el2 = fields[i];
+    const slot = i % (palette.fills.length || 1);
+    const fill = palette.fills[slot] ?? palette.surface;
+    const stroke = palette.borders[slot] ?? palette.border;
+    const textColor = textOnFill(fill, palette.text);
+    const rect = el2.tagName.toLowerCase() === "rect" ? el2 : el2.querySelector("rect");
+    if (rect) {
+      rect.setAttribute("fill", fill);
+      rect.setAttribute("stroke", stroke);
+      rect.setAttribute("stroke-width", "1.25px");
+      rect.setAttribute("rx", "4");
+      rect.setAttribute("ry", "4");
+      if (rect.style) {
+        rect.style.fill = fill;
+        rect.style.stroke = stroke;
+      }
+    }
+    const parentG = el2.tagName.toLowerCase() === "g" ? el2 : el2.parentElement;
+    if (parentG) {
+      for (const text of parentG.querySelectorAll("text")) {
+        text.setAttribute("fill", textColor);
+        const textEl = text;
+        if (textEl.style) {
+          textEl.style.setProperty("fill", textColor, "important");
+          textEl.style.setProperty("color", textColor, "important");
+        }
+      }
+    }
+  }
 }
 function styleSvg(svg, direction, settings, palette, dark) {
   const compactLayout = settings.compactLayout !== false;
@@ -2939,6 +3008,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
   fixEntityRelationshipDiagram(doc, palette, dark);
   fixKanbanDiagram(doc, palette, dark);
   fixTreemapDiagram(doc, palette, dark);
+  fixPacketDiagram(doc, palette, dark);
   root.classList?.add?.("mfe-enhanced", "mermaid-genie-diagram");
   if (root.style?.setProperty) {
     root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
@@ -24173,6 +24243,21 @@ function renderWithPele(options) {
     return null;
   }
 }
+function setNodeVars(el2, fill, stroke, text) {
+  const h = el2;
+  if (h && h.style) {
+    h.style.setProperty("--node-fill", fill);
+    h.style.setProperty("--node-border", stroke);
+    h.style.setProperty("--node-text", text);
+  }
+}
+function setElStyle(el2, prop, val, important = false) {
+  const h = el2;
+  if (h && h.style) {
+    if (important) h.style.setProperty(prop, val, "important");
+    else h.style.setProperty(prop, val);
+  }
+}
 function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
   if (doc.querySelector("parsererror")) return svgString;
@@ -24255,33 +24340,51 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const isPeleSeq = root.classList.contains("pele-sequence") || root.getAttribute("aria-roledescription") === "sequence";
   const isPeleState = root.classList.contains("pele-state") || root.getAttribute("aria-roledescription") === "state";
   const isPeleTreemap = root.classList.contains("pele-treemap") || root.getAttribute("aria-roledescription") === "treemap";
+  const isPelePacket = root.classList.contains("pele-packet") || root.getAttribute("aria-roledescription") === "packet";
+  const isPeleBlock = root.classList.contains("pele-block") || root.getAttribute("aria-roledescription") === "block";
+  const isPeleC4 = root.classList.contains("pele-c4") || root.getAttribute("aria-roledescription") === "c4";
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
   if (isPeleClass) {
-    for (const node of Array.from(doc.querySelectorAll("g.pele-class"))) {
+    const classes = Array.from(doc.querySelectorAll("g.pele-class"));
+    for (let i = 0; i < classes.length; i++) {
+      const node = classes[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(node, fill, stroke, textColor);
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-divider, path.pele-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", palette.border);
+        divider.setAttribute("stroke", stroke);
         divider.setAttribute("stroke-width", "1.25px");
+        setElStyle(divider, "fill", "none", true);
+        setElStyle(divider, "stroke", stroke, true);
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        title.setAttribute("fill", palette.text);
+        title.setAttribute("fill", textColor);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
+        setElStyle(title, "fill", textColor, true);
       }
       for (const member of Array.from(node.querySelectorAll(".pele-member, .pele-attribute, .pele-method"))) {
-        member.setAttribute("fill", palette.text);
+        member.setAttribute("fill", textColor);
         member.setAttribute("text-anchor", "start");
+        setElStyle(member, "fill", textColor, true);
       }
     }
     for (const marker of Array.from(doc.querySelectorAll(".pele-marker"))) {
@@ -24290,43 +24393,61 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleEr) {
-    for (const node of Array.from(doc.querySelectorAll("g.pele-entity"))) {
+    const entities = Array.from(doc.querySelectorAll("g.pele-entity"));
+    for (let i = 0; i < entities.length; i++) {
+      const node = entities[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(node, fill, stroke, textColor);
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-er-divider, path.pele-er-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", palette.border);
+        divider.setAttribute("stroke", stroke);
         divider.setAttribute("stroke-width", "1.25px");
+        setElStyle(divider, "fill", "none", true);
+        setElStyle(divider, "stroke", stroke, true);
       }
       const stripes = Array.from(node.querySelectorAll("g.pele-er-stripes rect"));
       for (let s = 0; s < stripes.length; s++) {
         const stripe = stripes[s];
-        stripe.setAttribute("fill", s % 2 === 0 ? palette.surface : palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
+        stripe.setAttribute("fill", fill);
+        stripe.setAttribute("fill-opacity", s % 2 === 0 ? "1" : "0.82");
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        title.setAttribute("fill", palette.text);
+        title.setAttribute("fill", textColor);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
+        setElStyle(title, "fill", textColor, true);
       }
       for (const text of Array.from(node.querySelectorAll(".pele-er-type, .pele-er-name"))) {
-        text.setAttribute("fill", palette.text);
+        text.setAttribute("fill", textColor);
         text.setAttribute("text-anchor", "start");
+        setElStyle(text, "fill", textColor, true);
       }
       for (const key of Array.from(node.querySelectorAll(".pele-er-keys"))) {
         key.setAttribute("fill", palette.accent);
         key.setAttribute("text-anchor", "start");
         key.setAttribute("font-weight", "bold");
+        setElStyle(key, "fill", palette.accent, true);
       }
     }
   }
   if (isPeleGantt) {
+    let taskBarIdx = 0;
     for (const taskGroup of Array.from(doc.querySelectorAll("g.pele-task"))) {
       const isMilestone = taskGroup.classList.contains("pele-milestone") || !!taskGroup.querySelector("path");
       const isActive = taskGroup.classList.contains("pele-active") || !!taskGroup.querySelector(".pele-active");
@@ -24339,10 +24460,8 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         }
         if (text) {
           text.setAttribute("fill", palette.text);
-          if (text.style) {
-            text.style.setProperty("fill", palette.text, "important");
-            text.style.setProperty("color", palette.text, "important");
-          }
+          setElStyle(text, "fill", palette.text, true);
+          setElStyle(text, "color", palette.text, true);
         }
         continue;
       }
@@ -24358,77 +24477,103 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         rw2 = minWidth;
         rect.setAttribute("width", String(rw2));
       }
-      const barFill = isActive ? palette.accent : palette.surface;
-      const barStroke = isActive ? palette.accent : palette.border;
+      const slot = taskBarIdx % (palette.fills.length || 1);
+      taskBarIdx++;
+      const barFill = isActive ? palette.accent : palette.fills[slot] ?? palette.surface;
+      const barStroke = isActive ? palette.accent : palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(barFill, palette.text);
       rect.setAttribute("fill", barFill);
       rect.setAttribute("stroke", barStroke);
       rect.setAttribute("stroke-width", "1.25px");
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
+      if (rect.style) {
+        rect.style.fill = barFill;
+        rect.style.stroke = barStroke;
+      }
       const cx2 = rx2 + rw2 / 2;
       const cy2 = ry2 + rh2 / 2 + 4.5;
       text.setAttribute("x", String(cx2));
       text.setAttribute("y", String(cy2));
       text.setAttribute("text-anchor", "middle");
-      const textColor = textOnFill(barFill, palette.text);
       text.setAttribute("fill", textColor);
       text.setAttribute("font-weight", "600");
-      const el2 = text;
-      if (el2.style) {
-        el2.style.setProperty("fill", textColor, "important");
-        el2.style.setProperty("color", textColor, "important");
-        el2.style.setProperty("text-anchor", "middle", "important");
-      }
+      setElStyle(text, "fill", textColor, true);
+      setElStyle(text, "color", textColor, true);
+      setElStyle(text, "text-anchor", "middle", true);
     }
     for (const title of Array.from(doc.querySelectorAll(".pele-title, .pele-section-label, .pele-axis text"))) {
       title.setAttribute("fill", palette.text);
     }
   }
   if (isPeleReq) {
-    for (const node of Array.from(doc.querySelectorAll("g.pele-requirement, g.pele-element"))) {
+    const reqNodes = Array.from(doc.querySelectorAll("g.pele-requirement, g.pele-element"));
+    for (let i = 0; i < reqNodes.length; i++) {
+      const node = reqNodes[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(node, fill, stroke, textColor);
       const rect = node.querySelector(":scope > rect");
       if (rect) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       for (const divider of Array.from(node.querySelectorAll(".pele-divider, path.pele-divider"))) {
         divider.setAttribute("fill", "none");
-        divider.setAttribute("stroke", palette.border);
+        divider.setAttribute("stroke", stroke);
         divider.setAttribute("stroke-width", "1.25px");
+        setElStyle(divider, "fill", "none", true);
+        setElStyle(divider, "stroke", stroke, true);
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
-        title.setAttribute("fill", palette.text);
+        title.setAttribute("fill", textColor);
         title.setAttribute("text-anchor", "middle");
         title.setAttribute("font-weight", "bold");
+        setElStyle(title, "fill", textColor, true);
       }
       const stereo = node.querySelector(":scope > text.pele-stereotype");
       if (stereo) {
-        stereo.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
+        stereo.setAttribute("fill", textColor);
         stereo.setAttribute("text-anchor", "middle");
       }
       for (const field of Array.from(node.querySelectorAll(".pele-field, .pele-field tspan"))) {
-        field.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
+        field.setAttribute("fill", textColor);
         field.setAttribute("text-anchor", "start");
       }
       for (const val of Array.from(node.querySelectorAll(".pele-value, .pele-value tspan"))) {
-        val.setAttribute("fill", palette.text);
+        val.setAttribute("fill", textColor);
         val.setAttribute("text-anchor", "start");
       }
     }
   }
   if (isPeleKanban) {
-    for (const col of Array.from(doc.querySelectorAll("g.pele-column, g.pele-cluster"))) {
+    const cols = Array.from(doc.querySelectorAll("g.pele-column, g.pele-cluster"));
+    for (let i = 0; i < cols.length; i++) {
+      const col = cols[i];
+      const slot = i % (palette.fills.length || 1);
+      const colFill = palette.fills[slot] ?? palette.surface;
+      const colBorder = palette.borders[slot] ?? palette.border;
+      const cardTextColor = textOnFill(colFill, palette.text);
       const rect = col.querySelector(":scope > rect");
       if (rect) {
         rect.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc"));
-        rect.setAttribute("stroke", palette.border);
-        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("stroke", colBorder);
+        rect.setAttribute("stroke-width", "1.5px");
         rect.setAttribute("rx", "8");
         rect.setAttribute("ry", "8");
+        if (rect.style) {
+          rect.style.stroke = colBorder;
+        }
       }
       for (const title of Array.from(col.querySelectorAll(".pele-cluster-label"))) {
         title.setAttribute("fill", palette.text);
@@ -24441,67 +24586,189 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         count.setAttribute("text-anchor", "end");
       }
       for (const card of Array.from(col.querySelectorAll("g.pele-card, g.pele-node"))) {
+        setNodeVars(card, colFill, colBorder, cardTextColor);
         const cardRect = card.querySelector("rect");
         if (cardRect) {
-          cardRect.setAttribute("fill", palette.surface);
-          cardRect.setAttribute("stroke", palette.border);
+          cardRect.setAttribute("fill", colFill);
+          cardRect.setAttribute("stroke", colBorder);
           cardRect.setAttribute("stroke-width", "1.25px");
           cardRect.setAttribute("rx", "6");
           cardRect.setAttribute("ry", "6");
+          if (cardRect.style) {
+            cardRect.style.fill = colFill;
+            cardRect.style.stroke = colBorder;
+          }
         }
         for (const cardText of Array.from(card.querySelectorAll("text"))) {
-          cardText.setAttribute("fill", palette.text);
+          cardText.setAttribute("fill", cardTextColor);
           cardText.setAttribute("text-anchor", "start");
-          const el2 = cardText;
-          if (el2.style) {
-            el2.style.setProperty("text-anchor", "start", "important");
-            el2.style.setProperty("text-align", "left", "important");
-            el2.style.setProperty("fill", palette.text, "important");
-          }
+          setElStyle(cardText, "text-anchor", "start", true);
+          setElStyle(cardText, "text-align", "left", true);
+          setElStyle(cardText, "fill", cardTextColor, true);
+          setElStyle(cardText, "color", cardTextColor, true);
         }
       }
     }
   }
   if (isPeleSeq) {
-    for (const actor of Array.from(doc.querySelectorAll("g.pele-actor, g.pele-participant"))) {
+    const actors = Array.from(doc.querySelectorAll("g.pele-actor, g.pele-participant"));
+    for (let i = 0; i < actors.length; i++) {
+      const actor = actors[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(actor, fill, stroke, textColor);
       for (const rect of Array.from(actor.querySelectorAll("rect"))) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "4");
         rect.setAttribute("ry", "4");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       for (const text of Array.from(actor.querySelectorAll("text"))) {
-        text.setAttribute("fill", palette.text);
+        text.setAttribute("fill", textColor);
+        setElStyle(text, "fill", textColor, true);
       }
     }
   }
   if (isPeleState) {
-    for (const state of Array.from(doc.querySelectorAll("g.pele-state-node, g.pele-node"))) {
+    const states = Array.from(doc.querySelectorAll("g.pele-state-node, g.pele-node"));
+    for (let i = 0; i < states.length; i++) {
+      const state = states[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(state, fill, stroke, textColor);
       const rect = state.querySelector("rect");
       if (rect) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
         rect.setAttribute("stroke-width", "1.25px");
         rect.setAttribute("rx", "6");
         rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       const text = state.querySelector("text");
       if (text) {
-        text.setAttribute("fill", palette.text);
+        text.setAttribute("fill", textColor);
+        setElStyle(text, "fill", textColor, true);
       }
     }
   }
   if (isPeleTreemap) {
-    for (const leaf of Array.from(doc.querySelectorAll("g.pele-leaf, rect.pele-leaf"))) {
+    const leaves = Array.from(doc.querySelectorAll("g.pele-leaf, rect.pele-leaf"));
+    for (let i = 0; i < leaves.length; i++) {
+      const leaf = leaves[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
       const rect = leaf.tagName.toLowerCase() === "rect" ? leaf : leaf.querySelector("rect");
       if (rect) {
-        rect.setAttribute("fill", palette.surface);
-        rect.setAttribute("stroke", palette.border);
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
       }
       const text = leaf.tagName.toLowerCase() === "rect" ? null : leaf.querySelector("text");
       if (text) {
-        text.setAttribute("fill", palette.text);
+        text.setAttribute("fill", textColor);
+        setElStyle(text, "fill", textColor, true);
+      }
+    }
+  }
+  if (isPelePacket) {
+    const fields = Array.from(doc.querySelectorAll("g.pele-packet-fields > g.pele-node"));
+    for (let i = 0; i < fields.length; i++) {
+      const field = fields[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(field, fill, stroke, textColor);
+      const rect = field.querySelector("rect");
+      if (rect) {
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "4");
+        rect.setAttribute("ry", "4");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+      const text = field.querySelector("text");
+      if (text) {
+        text.setAttribute("fill", textColor);
+        text.setAttribute("font-weight", "600");
+        setElStyle(text, "fill", textColor, true);
+        setElStyle(text, "color", textColor, true);
+      }
+    }
+  }
+  if (isPeleBlock) {
+    const blocks = Array.from(doc.querySelectorAll("g.pele-nodes > g.pele-node"));
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(b, fill, stroke, textColor);
+      const rect = b.querySelector("rect");
+      if (rect) {
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
+        rect.setAttribute("stroke-width", "1.25px");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+      const text = b.querySelector("text.pele-label, text");
+      if (text) {
+        text.setAttribute("fill", textColor);
+        setElStyle(text, "fill", textColor, true);
+      }
+    }
+  }
+  if (isPeleC4) {
+    const nodes = Array.from(doc.querySelectorAll("g.pele-nodes > g.pele-node"));
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const slot = i % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      setNodeVars(node, fill, stroke, textColor);
+      for (const shape of Array.from(node.querySelectorAll("rect, circle"))) {
+        shape.setAttribute("fill", fill);
+        shape.setAttribute("stroke", stroke);
+        if (shape.style) {
+          shape.style.fill = fill;
+          shape.style.stroke = stroke;
+        }
+      }
+      for (const text of Array.from(node.querySelectorAll("text, tspan"))) {
+        if (text.classList.contains("pele-c4-type") || text.classList.contains("pele-c4-descr")) {
+          text.setAttribute("fill", dark ? "#cbd5e1" : "#475569");
+        } else {
+          text.setAttribute("fill", textColor);
+        }
       }
     }
   }

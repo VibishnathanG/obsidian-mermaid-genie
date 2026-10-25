@@ -217,13 +217,13 @@ Vehicle <|-- ElectricCar`;
     // Divider paths must have fill none and valid stroke
     for (const divider of doc.querySelectorAll('.pele-divider, path.pele-divider')) {
       assert.equal(divider.getAttribute('fill'), 'none', 'Divider must not be filled with solid color');
-      assert.equal(divider.getAttribute('stroke'), palette.border, 'Divider must have clean palette border stroke');
+      assert.ok(palette.borders.includes(divider.getAttribute('stroke') || ''), 'Divider must have coordinated palette border stroke');
     }
 
     // Members must have start text-anchor
     for (const member of doc.querySelectorAll('.pele-member, .pele-attribute, .pele-method')) {
       assert.equal(member.getAttribute('text-anchor'), 'start', 'Member text must be left-aligned with start anchor');
-      assert.equal(member.getAttribute('fill'), palette.text, 'Member text must have palette text fill');
+      assert.ok([palette.text, ...palette.textOnFills].includes(member.getAttribute('fill') || ''), 'Member text must have palette text fill');
     }
 
     // Class box width should be expanded by custom measurer (at least 200px)
@@ -363,11 +363,53 @@ wip[⚡ Actively in Progress]
       assert.equal(count.getAttribute('text-anchor'), 'end', 'Kanban count badge must have end text-anchor');
     }
 
-    // Kanban card task text must be start-aligned
+    // Kanban card task text must be start-aligned and have coordinated color fills
     for (const card of kanbanDoc.querySelectorAll('g.pele-card')) {
+      const rect = card.querySelector('rect');
+      assert.ok(rect);
+      assert.ok(palette.fills.includes(rect.getAttribute('fill') || ''), 'Card rect must have coordinated palette fill');
       for (const cardText of card.querySelectorAll('text')) {
         assert.equal(cardText.getAttribute('text-anchor'), 'start', 'Kanban card text must be start-aligned');
       }
     }
+  });
+
+  it('renders Packet diagram with coordinated palette fills for all packet fields', () => {
+    const packetText = `packet-beta
+0-7: "Packet Type (OpCode)"
+8-15: "Flags & Security"
+16-31: "Payload Sequence Length"
+32-63: "Originating Node Address"
+64-95: "Destination Node Address"
+96-127: "CRC32 Checksum Verification"`;
+
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+    const packetSvg = renderWithPele({
+      text: packetText,
+      id: 'packet-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+
+    assert.ok(packetSvg, 'Packet diagram should render with Pele');
+    const doc = new (require('jsdom')).JSDOM(packetSvg).window.document;
+    const fields = doc.querySelectorAll('g.pele-packet-fields > g.pele-node');
+    assert.equal(fields.length, 6, 'Should have 6 packet fields');
+
+    const usedFills = new Set<string>();
+    for (const field of fields) {
+      const rect = field.querySelector('rect');
+      const text = field.querySelector('text');
+      assert.ok(rect && text, 'Each field must have a rect and text');
+
+      const fill = rect.getAttribute('fill');
+      assert.ok(fill && palette.fills.includes(fill), `Rect fill (${fill}) must be from palette.fills`);
+      usedFills.add(fill);
+
+      const textFill = text.getAttribute('fill');
+      assert.ok(textFill, 'Field text must have fill attribute');
+    }
+    assert.ok(usedFills.size >= 4, `Should use multiple distinct coordinated colors (found ${usedFills.size})`);
   });
 });
