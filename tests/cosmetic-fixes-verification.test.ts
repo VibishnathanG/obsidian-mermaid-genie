@@ -137,7 +137,7 @@ describe('Six User Defect Fixes Verification', () => {
   });
 
   // 4. Git Graph redesign (D13)
-  it('4. Git Graph: ensures branch lines have distinct colors and labels have white text', () => {
+  it('4. Git Graph: ensures branch lines have luminous colors and labels have high contrast', () => {
     const gitSvg = `<svg id="git-test" class="gitGraph mermaid">
       <line class="branch branch0" x1="0" y1="0" x2="100" y2="0"/>
       <line class="branch branch1" x1="0" y1="50" x2="100" y2="50"/>
@@ -152,15 +152,15 @@ describe('Six User Defect Fixes Verification', () => {
     const d = new JSDOM(styled).window.document;
 
     const b0 = d.querySelector('line.branch0');
-    assert.equal(b0.getAttribute('stroke'), palette.borders[0]);
+    assert.equal(b0.getAttribute('stroke'), '#7dd3fc');
     const b1 = d.querySelector('line.branch1');
-    assert.equal(b1.getAttribute('stroke'), palette.borders[1]);
+    assert.equal(b1.getAttribute('stroke'), '#6ee7b7');
 
     const btext = d.querySelector('.branch-label0 text');
-    assert.equal(btext.getAttribute('fill'), '#ffffff');
+    assert.equal(btext.getAttribute('fill'), '#0f172a');
 
     const commitCircle = d.querySelector('circle.commit0');
-    assert.equal(commitCircle.getAttribute('fill'), palette.borders[0]);
+    assert.equal(commitCircle.getAttribute('fill'), '#7dd3fc');
     assert.equal(commitCircle.getAttribute('stroke'), '#ffffff');
 
     const commitBkg = d.querySelector('rect.commit-label-bkg');
@@ -169,8 +169,8 @@ describe('Six User Defect Fixes Verification', () => {
     assert.equal(commitText.getAttribute('fill'), '#ffffff');
   });
 
-  // 5. Cynefin Framework centering vs Kanban / Architecture left-alignment
-  it('5. Cynefin Framework: ensures quadrant titles and items are centered while Kanban and Arch remain start-aligned', () => {
+  // 5. Centered Headings for Wardley, Treemap, Arch, and Cynefin vs Kanban start-aligned
+  it('5. Headings: centers Wardley, Treemap, Arch, and Cynefin while Kanban remains start-aligned', () => {
     const cynefinCode = `cynefin-beta
     title Engineering Problem Domains
     complex
@@ -205,7 +205,7 @@ describe('Six User Defect Fixes Verification', () => {
     const kLabel = dKanban.querySelector('.pele-cluster-label');
     assert.equal(kLabel.getAttribute('text-anchor'), 'start', 'Kanban column title must remain start-aligned');
 
-    // Check Architecture Diagram cluster title remains start-aligned
+    // Check Architecture Diagram cluster title is centered
     const archCode = `architecture-beta
       group cloud(cloud)[AWS Infrastructure]
       service alb(internet)[Application Load Balancer] in cloud`;
@@ -219,7 +219,27 @@ describe('Six User Defect Fixes Verification', () => {
     const styledArch = styleSvg(archSvg, '', DEFAULT_SETTINGS, palette, true);
     const dArch = new JSDOM(styledArch).window.document;
     const archLabel = dArch.querySelector('.pele-cluster-label');
-    assert.equal(archLabel.getAttribute('text-anchor'), 'start', 'Architecture cluster title must remain start-aligned');
+    const archRect = dArch.querySelector('.pele-cluster rect');
+    const expectedCx = (parseFloat(archRect.getAttribute('x') || '0') + parseFloat(archRect.getAttribute('width') || '0') / 2).toString();
+    assert.equal(archLabel.getAttribute('text-anchor'), 'middle', 'Architecture cluster title must be centered');
+    assert.equal(archLabel.getAttribute('x'), expectedCx, 'Architecture cluster title x must be exactly centered over cluster rect');
+
+    // Check Treemap section heading alone is centered
+    const treemapCode = `treemap-beta
+      "Repository Codebase"
+          "Core Parser": 45
+          "Layout Engine": 35`;
+    const treemapSvg = renderWithPele({
+      text: treemapCode,
+      id: 'treemap-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    const styledTreemap = styleSvg(treemapSvg, '', DEFAULT_SETTINGS, palette, true);
+    const dTreemap = new JSDOM(styledTreemap).window.document;
+    const tmSecLabel = dTreemap.querySelector('g.pele-section text:not(.pele-value)');
+    assert.equal(tmSecLabel.getAttribute('text-anchor'), 'middle', 'Treemap section heading must be centered');
   });
 
   // 6. AgentFlow Colorization (D33)

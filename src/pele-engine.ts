@@ -187,6 +187,9 @@ export function enhancePeleSvg(
   const isPeleArch = root.classList.contains('pele-architecture') || root.getAttribute('aria-roledescription') === 'architecture';
   const isPeleTimeline = root.classList.contains('pele-timeline') || root.getAttribute('aria-roledescription') === 'timeline';
   const isPeleJourney = root.classList.contains('pele-journey') || root.getAttribute('aria-roledescription') === 'journey';
+  const isPeleGit = root.classList.contains('pele-gitGraph') || root.getAttribute('aria-roledescription') === 'gitGraph';
+  const isPeleWardley = root.classList.contains('pele-wardley') || root.getAttribute('aria-roledescription') === 'wardley';
+  const isPeleCynefin = root.classList.contains('pele-cynefin') || root.getAttribute('aria-roledescription') === 'cynefin';
 
   // 1. Flowcharts: Coordinated branch palette
   if (isPeleFlowchart) {
@@ -595,8 +598,27 @@ export function enhancePeleSvg(
     }
   }
 
-  // 9. Treemap Diagrams: Coordinated leaf node fills & borders
+  // 9. Treemap Diagrams: Coordinated leaf node fills & borders and centered section headings
   if (isPeleTreemap) {
+    // Center section titles alone horizontally over their section rects
+    const sections = Array.from(doc.querySelectorAll('g.pele-section, g.pele-node.pele-section'));
+    for (const section of sections) {
+      const rect = section.querySelector(':scope > rect, rect') as SVGRectElement | null;
+      if (rect) {
+        const rx = parseFloat(rect.getAttribute('x') || '0');
+        const rw = parseFloat(rect.getAttribute('width') || '0');
+        const cx = rx + rw / 2;
+        const titleText = section.querySelector(':scope > text:not(.pele-value), text:not(.pele-value)') as SVGTextElement | null;
+        if (titleText) {
+          titleText.setAttribute('x', String(cx));
+          titleText.setAttribute('text-anchor', 'middle');
+          titleText.setAttribute('fill', palette.text);
+          setElStyle(titleText, 'text-anchor', 'middle', true);
+          setElStyle(titleText, 'text-align', 'center', true);
+        }
+      }
+    }
+
     const leaves = Array.from(doc.querySelectorAll('g.pele-leaf, rect.pele-leaf'));
     for (let i = 0; i < leaves.length; i++) {
       const leaf = leaves[i]!;
@@ -743,15 +765,17 @@ export function enhancePeleSvg(
       }
 
       const label = cluster.querySelector('.pele-cluster-label, text.pele-cluster-label');
-      if (label) {
+      if (label && rect) {
+        const rx = parseFloat(rect.getAttribute('x') || '0');
+        const rw = parseFloat(rect.getAttribute('width') || '0');
+        const cx = rx + rw / 2;
+        label.setAttribute('x', String(cx));
+        label.setAttribute('text-anchor', 'middle');
         label.setAttribute('fill', palette.text);
-        label.setAttribute('text-anchor', 'start');
         setElStyle(label, 'fill', palette.text, true);
         setElStyle(label, 'font-weight', 'bold');
-        if ((label as HTMLElement).style) {
-          (label as HTMLElement).style.setProperty('text-anchor', 'start', 'important');
-          (label as HTMLElement).style.setProperty('text-align', 'left', 'important');
-        }
+        setElStyle(label, 'text-anchor', 'middle', true);
+        setElStyle(label, 'text-align', 'center', true);
       }
 
       const icon = cluster.querySelector('svg.pele-icon path');
@@ -1004,6 +1028,120 @@ export function enhancePeleSvg(
         txt.setAttribute('fill', palette.text);
         setElStyle(txt, 'fill', palette.text, true);
       }
+    }
+  }
+
+  // 16. Git Graphs: Luminous, high-visibility branch lines, styled badges, and high-contrast commit labels
+  if (isPeleGit) {
+    const gitBranchColors = dark
+      ? ['#7dd3fc', '#6ee7b7', '#fde047', '#c4b5fd', '#67e8f9', '#f472b6']
+      : ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777'];
+
+    // Update CSS series variables on root for Pele
+    for (let s = 0; s < 6; s++) {
+      root.style.setProperty(`--pele-series-${s + 1}`, gitBranchColors[s % gitBranchColors.length]!);
+    }
+
+    const branches = Array.from(doc.querySelectorAll('g.pele-branch'));
+    for (let b = 0; b < branches.length; b++) {
+      const branch = branches[b]!;
+      const branchColor = gitBranchColors[b % gitBranchColors.length]!;
+
+      const lane = branch.querySelector('path.pele-lane') as SVGPathElement | null;
+      if (lane) {
+        lane.setAttribute('stroke', branchColor);
+        lane.setAttribute('stroke-width', '2.5px');
+        lane.setAttribute('stroke-dasharray', 'none');
+        setElStyle(lane, 'stroke', branchColor, true);
+        setElStyle(lane, 'stroke-width', '2.5px', true);
+      }
+
+      const rect = branch.querySelector('rect') as SVGRectElement | null;
+      if (rect) {
+        rect.setAttribute('fill', branchColor);
+        rect.setAttribute('stroke', branchColor);
+        rect.setAttribute('rx', '4');
+        rect.setAttribute('ry', '4');
+        setElStyle(rect, 'fill', branchColor, true);
+        setElStyle(rect, 'stroke', branchColor, true);
+      }
+
+      const label = branch.querySelector('text') as SVGTextElement | null;
+      if (label) {
+        const textColor = dark ? '#0f172a' : '#ffffff';
+        label.setAttribute('fill', textColor);
+        setElStyle(label, 'fill', textColor, true);
+        setElStyle(label, 'color', textColor, true);
+        setElStyle(label, 'font-weight', '700', true);
+      }
+    }
+
+    // Connecting curves
+    const edges = Array.from(doc.querySelectorAll('g.pele-edges path.pele-edge'));
+    for (let e = 0; e < edges.length; e++) {
+      const edge = edges[e] as SVGPathElement;
+      const strokeVal = edge.getAttribute('stroke') || '';
+      const seriesMatch = strokeVal.match(/--pele-series-(\d+)/);
+      const slot = seriesMatch ? parseInt(seriesMatch[1]!, 10) - 1 : (e % gitBranchColors.length);
+      const edgeColor = gitBranchColors[slot % gitBranchColors.length]!;
+      edge.setAttribute('stroke', edgeColor);
+      edge.setAttribute('stroke-width', '2.5px');
+      setElStyle(edge, 'stroke', edgeColor, true);
+      setElStyle(edge, 'stroke-width', '2.5px', true);
+    }
+
+    // Commit circles and commit labels
+    const commits = Array.from(doc.querySelectorAll('g.pele-commit'));
+    for (let c = 0; c < commits.length; c++) {
+      const commit = commits[c]!;
+      const circle = commit.querySelector('circle') as SVGCircleElement | null;
+      if (circle) {
+        const fillVal = circle.getAttribute('fill') || '';
+        const seriesMatch = fillVal.match(/--pele-series-(\d+)/);
+        const slot = seriesMatch ? parseInt(seriesMatch[1]!, 10) - 1 : (c % gitBranchColors.length);
+        const commitColor = gitBranchColors[slot % gitBranchColors.length]!;
+        circle.setAttribute('fill', commitColor);
+        circle.setAttribute('stroke', dark ? '#ffffff' : '#0f172a');
+        circle.setAttribute('stroke-width', '2px');
+        setElStyle(circle, 'fill', commitColor, true);
+      }
+
+      const labelRect = commit.querySelector('g.pele-commit-label rect') as SVGRectElement | null;
+      if (labelRect) {
+        const bkgFill = dark ? '#222e3e' : '#ffffff';
+        const bkgStroke = dark ? '#64748b' : '#94a3b8';
+        labelRect.setAttribute('fill', bkgFill);
+        labelRect.setAttribute('stroke', bkgStroke);
+        labelRect.setAttribute('stroke-width', '1px');
+        labelRect.setAttribute('rx', '4');
+        labelRect.setAttribute('ry', '4');
+        labelRect.setAttribute('opacity', '0.96');
+        setElStyle(labelRect, 'fill', bkgFill, true);
+        setElStyle(labelRect, 'stroke', bkgStroke, true);
+      }
+
+      const labelText = commit.querySelector('g.pele-commit-label text') as SVGTextElement | null;
+      if (labelText) {
+        const txtColor = dark ? '#ffffff' : '#0f172a';
+        labelText.setAttribute('fill', txtColor);
+        setElStyle(labelText, 'fill', txtColor, true);
+        setElStyle(labelText, 'color', txtColor, true);
+        setElStyle(labelText, 'font-weight', '600', true);
+      }
+    }
+  }
+
+  // 17. Wardley Maps: Center map title horizontally
+  if (isPeleWardley) {
+    const title = doc.querySelector('.pele-title, text.pele-title');
+    if (title) {
+      const viewBox = root.getAttribute('viewBox')?.split(/\s+|,/) || [];
+      const vbW = parseFloat(viewBox[2] || root.getAttribute('width') || '800');
+      title.setAttribute('x', String(vbW / 2));
+      title.setAttribute('text-anchor', 'middle');
+      title.setAttribute('fill', palette.text);
+      setElStyle(title, 'text-anchor', 'middle', true);
+      setElStyle(title, 'text-align', 'center', true);
     }
   }
 

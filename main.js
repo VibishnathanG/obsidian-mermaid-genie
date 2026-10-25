@@ -2496,7 +2496,7 @@ function fixTreemapDiagram(doc, palette, dark) {
       headerRect.setAttribute("rx", "4");
       headerRect.setAttribute("ry", "4");
     }
-    const secRect = section.querySelector("rect.treemapSection:not(.section0)");
+    const secRect = section.querySelector("rect.treemapSection:not(.section0), rect.treemapSectionHeader, :scope > rect");
     if (secRect) {
       secRect.setAttribute("stroke", palette.border);
       secRect.setAttribute("stroke-width", "1.5px");
@@ -2510,6 +2510,19 @@ function fixTreemapDiagram(doc, palette, dark) {
       secLabel.setAttribute("font-size", "13px");
       const sy2 = parseFloat(secLabel.getAttribute("y") || "0");
       if (sy2 < 15) secLabel.setAttribute("y", "15");
+      if (secRect) {
+        const rx2 = parseFloat(secRect.getAttribute("x") || "0");
+        const rw2 = parseFloat(secRect.getAttribute("width") || "0");
+        if (rw2 > 0) {
+          const cx2 = rx2 + rw2 / 2;
+          secLabel.setAttribute("x", String(cx2));
+          secLabel.setAttribute("text-anchor", "middle");
+          if (secLabel.style) {
+            secLabel.style.setProperty("text-anchor", "middle", "important");
+            secLabel.style.setProperty("text-align", "center", "important");
+          }
+        }
+      }
     }
     const secValue = section.querySelector("text.treemapSectionValue");
     if (secValue) {
@@ -2639,12 +2652,12 @@ function fixPieChart(doc, palette, dark) {
 }
 function fixGitGraph(doc, palette, dark) {
   const root = doc.documentElement;
-  const isGit = root.classList.contains("gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, [class*="branch0"]');
+  const isGit = root.classList.contains("gitGraph") || root.classList.contains("pele-gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, g.pele-branch, [class*="branch0"]');
   if (!isGit) return;
-  const branchColors = dark ? palette.borders.length >= 6 ? palette.borders : ["#38bdf8", "#34d399", "#fbbf24", "#a78bfa", "#22d3ee", "#f472b6"] : palette.borders.length >= 6 ? palette.borders : ["#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"];
+  const branchColors = dark ? ["#7dd3fc", "#6ee7b7", "#fde047", "#c4b5fd", "#67e8f9", "#f472b6"] : ["#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"];
   for (let b = 0; b < 10; b++) {
     const branchColor = branchColors[b % branchColors.length];
-    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}, path.branch.branch${b}, path.branch${b}`)) {
+    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}, path.branch.branch${b}, path.branch${b}, path.pele-lane`)) {
       line.setAttribute("stroke", branchColor);
       line.setAttribute("stroke-width", "2.5px");
       line.setAttribute("stroke-dasharray", "none");
@@ -2671,10 +2684,11 @@ function fixGitGraph(doc, palette, dark) {
       }
     }
     for (const btext of doc.querySelectorAll(`.branch-label${b} text, .branch-label${b}`)) {
-      btext.setAttribute("fill", "#ffffff");
+      const textColor = dark ? "#0f172a" : "#ffffff";
+      btext.setAttribute("fill", textColor);
       if (btext.style) {
-        btext.style.setProperty("fill", "#ffffff", "important");
-        btext.style.setProperty("color", "#ffffff", "important");
+        btext.style.setProperty("fill", textColor, "important");
+        btext.style.setProperty("color", textColor, "important");
         btext.style.setProperty("font-weight", "700", "important");
       }
     }
@@ -3192,7 +3206,24 @@ function styleSvg(svg, direction, settings, palette, dark) {
   fixPacketDiagram(doc, palette, dark);
   fixPieChart(doc, palette, dark);
   fixGitGraph(doc, palette, dark);
-  for (const cl2 of doc.querySelectorAll(':is([id*="Cynefin" i], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"]) :is(.cluster-label text, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel, text.pele-cluster-label)')) {
+  for (const cluster of doc.querySelectorAll('g.cluster[id*="wardley" i], g.pele-cluster[data-id="Wardley"], g.cluster[id*="cloud"], g.cluster[id*="arch"]')) {
+    const rect = cluster.querySelector(":scope > rect, rect");
+    const label = cluster.querySelector(".cluster-label text, .cluster-label span, text.pele-cluster-label, .cluster-label .nodeLabel, text.pele-title");
+    if (rect && label) {
+      const rx2 = parseFloat(rect.getAttribute("x") || "0");
+      const rw2 = parseFloat(rect.getAttribute("width") || "0");
+      if (rw2 > 0) {
+        const cx2 = rx2 + rw2 / 2;
+        label.setAttribute("x", String(cx2));
+        label.setAttribute("text-anchor", "middle");
+        if (label.style) {
+          label.style.setProperty("text-anchor", "middle", "important");
+          label.style.setProperty("text-align", "center", "important");
+        }
+      }
+    }
+  }
+  for (const cl2 of doc.querySelectorAll(':is([id*="Cynefin" i], [id*="wardley" i], g[data-id="Wardley"], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"], g.cluster[id*="cloud"], g.cluster[id*="arch"]) :is(.cluster-label text, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel, text.pele-cluster-label)')) {
     cl2.setAttribute("text-anchor", "middle");
     if (cl2.style) {
       cl2.style.setProperty("text-anchor", "middle", "important");
@@ -24540,6 +24571,9 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const isPeleArch = root.classList.contains("pele-architecture") || root.getAttribute("aria-roledescription") === "architecture";
   const isPeleTimeline = root.classList.contains("pele-timeline") || root.getAttribute("aria-roledescription") === "timeline";
   const isPeleJourney = root.classList.contains("pele-journey") || root.getAttribute("aria-roledescription") === "journey";
+  const isPeleGit = root.classList.contains("pele-gitGraph") || root.getAttribute("aria-roledescription") === "gitGraph";
+  const isPeleWardley = root.classList.contains("pele-wardley") || root.getAttribute("aria-roledescription") === "wardley";
+  const isPeleCynefin = root.classList.contains("pele-cynefin") || root.getAttribute("aria-roledescription") === "cynefin";
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
@@ -24881,6 +24915,23 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleTreemap) {
+    const sections = Array.from(doc.querySelectorAll("g.pele-section, g.pele-node.pele-section"));
+    for (const section of sections) {
+      const rect = section.querySelector(":scope > rect, rect");
+      if (rect) {
+        const rx2 = parseFloat(rect.getAttribute("x") || "0");
+        const rw2 = parseFloat(rect.getAttribute("width") || "0");
+        const cx2 = rx2 + rw2 / 2;
+        const titleText = section.querySelector(":scope > text:not(.pele-value), text:not(.pele-value)");
+        if (titleText) {
+          titleText.setAttribute("x", String(cx2));
+          titleText.setAttribute("text-anchor", "middle");
+          titleText.setAttribute("fill", palette.text);
+          setElStyle(titleText, "text-anchor", "middle", true);
+          setElStyle(titleText, "text-align", "center", true);
+        }
+      }
+    }
     const leaves = Array.from(doc.querySelectorAll("g.pele-leaf, rect.pele-leaf"));
     for (let i = 0; i < leaves.length; i++) {
       const leaf = leaves[i];
@@ -25009,15 +25060,17 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         }
       }
       const label = cluster.querySelector(".pele-cluster-label, text.pele-cluster-label");
-      if (label) {
+      if (label && rect) {
+        const rx2 = parseFloat(rect.getAttribute("x") || "0");
+        const rw2 = parseFloat(rect.getAttribute("width") || "0");
+        const cx2 = rx2 + rw2 / 2;
+        label.setAttribute("x", String(cx2));
+        label.setAttribute("text-anchor", "middle");
         label.setAttribute("fill", palette.text);
-        label.setAttribute("text-anchor", "start");
         setElStyle(label, "fill", palette.text, true);
         setElStyle(label, "font-weight", "bold");
-        if (label.style) {
-          label.style.setProperty("text-anchor", "start", "important");
-          label.style.setProperty("text-align", "left", "important");
-        }
+        setElStyle(label, "text-anchor", "middle", true);
+        setElStyle(label, "text-align", "center", true);
       }
       const icon = cluster.querySelector("svg.pele-icon path");
       if (icon) {
@@ -25243,6 +25296,102 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         txt.setAttribute("fill", palette.text);
         setElStyle(txt, "fill", palette.text, true);
       }
+    }
+  }
+  if (isPeleGit) {
+    const gitBranchColors = dark ? ["#7dd3fc", "#6ee7b7", "#fde047", "#c4b5fd", "#67e8f9", "#f472b6"] : ["#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"];
+    for (let s = 0; s < 6; s++) {
+      root.style.setProperty(`--pele-series-${s + 1}`, gitBranchColors[s % gitBranchColors.length]);
+    }
+    const branches = Array.from(doc.querySelectorAll("g.pele-branch"));
+    for (let b = 0; b < branches.length; b++) {
+      const branch = branches[b];
+      const branchColor = gitBranchColors[b % gitBranchColors.length];
+      const lane = branch.querySelector("path.pele-lane");
+      if (lane) {
+        lane.setAttribute("stroke", branchColor);
+        lane.setAttribute("stroke-width", "2.5px");
+        lane.setAttribute("stroke-dasharray", "none");
+        setElStyle(lane, "stroke", branchColor, true);
+        setElStyle(lane, "stroke-width", "2.5px", true);
+      }
+      const rect = branch.querySelector("rect");
+      if (rect) {
+        rect.setAttribute("fill", branchColor);
+        rect.setAttribute("stroke", branchColor);
+        rect.setAttribute("rx", "4");
+        rect.setAttribute("ry", "4");
+        setElStyle(rect, "fill", branchColor, true);
+        setElStyle(rect, "stroke", branchColor, true);
+      }
+      const label = branch.querySelector("text");
+      if (label) {
+        const textColor = dark ? "#0f172a" : "#ffffff";
+        label.setAttribute("fill", textColor);
+        setElStyle(label, "fill", textColor, true);
+        setElStyle(label, "color", textColor, true);
+        setElStyle(label, "font-weight", "700", true);
+      }
+    }
+    const edges = Array.from(doc.querySelectorAll("g.pele-edges path.pele-edge"));
+    for (let e = 0; e < edges.length; e++) {
+      const edge = edges[e];
+      const strokeVal = edge.getAttribute("stroke") || "";
+      const seriesMatch = strokeVal.match(/--pele-series-(\d+)/);
+      const slot = seriesMatch ? parseInt(seriesMatch[1], 10) - 1 : e % gitBranchColors.length;
+      const edgeColor = gitBranchColors[slot % gitBranchColors.length];
+      edge.setAttribute("stroke", edgeColor);
+      edge.setAttribute("stroke-width", "2.5px");
+      setElStyle(edge, "stroke", edgeColor, true);
+      setElStyle(edge, "stroke-width", "2.5px", true);
+    }
+    const commits = Array.from(doc.querySelectorAll("g.pele-commit"));
+    for (let c = 0; c < commits.length; c++) {
+      const commit = commits[c];
+      const circle = commit.querySelector("circle");
+      if (circle) {
+        const fillVal = circle.getAttribute("fill") || "";
+        const seriesMatch = fillVal.match(/--pele-series-(\d+)/);
+        const slot = seriesMatch ? parseInt(seriesMatch[1], 10) - 1 : c % gitBranchColors.length;
+        const commitColor = gitBranchColors[slot % gitBranchColors.length];
+        circle.setAttribute("fill", commitColor);
+        circle.setAttribute("stroke", dark ? "#ffffff" : "#0f172a");
+        circle.setAttribute("stroke-width", "2px");
+        setElStyle(circle, "fill", commitColor, true);
+      }
+      const labelRect = commit.querySelector("g.pele-commit-label rect");
+      if (labelRect) {
+        const bkgFill = dark ? "#222e3e" : "#ffffff";
+        const bkgStroke = dark ? "#64748b" : "#94a3b8";
+        labelRect.setAttribute("fill", bkgFill);
+        labelRect.setAttribute("stroke", bkgStroke);
+        labelRect.setAttribute("stroke-width", "1px");
+        labelRect.setAttribute("rx", "4");
+        labelRect.setAttribute("ry", "4");
+        labelRect.setAttribute("opacity", "0.96");
+        setElStyle(labelRect, "fill", bkgFill, true);
+        setElStyle(labelRect, "stroke", bkgStroke, true);
+      }
+      const labelText = commit.querySelector("g.pele-commit-label text");
+      if (labelText) {
+        const txtColor = dark ? "#ffffff" : "#0f172a";
+        labelText.setAttribute("fill", txtColor);
+        setElStyle(labelText, "fill", txtColor, true);
+        setElStyle(labelText, "color", txtColor, true);
+        setElStyle(labelText, "font-weight", "600", true);
+      }
+    }
+  }
+  if (isPeleWardley) {
+    const title = doc.querySelector(".pele-title, text.pele-title");
+    if (title) {
+      const viewBox = root.getAttribute("viewBox")?.split(/\s+|,/) || [];
+      const vbW = parseFloat(viewBox[2] || root.getAttribute("width") || "800");
+      title.setAttribute("x", String(vbW / 2));
+      title.setAttribute("text-anchor", "middle");
+      title.setAttribute("fill", palette.text);
+      setElStyle(title, "text-anchor", "middle", true);
+      setElStyle(title, "text-align", "center", true);
     }
   }
   return new XMLSerializer().serializeToString(doc.documentElement);
@@ -26217,21 +26366,21 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
           pieSectionTextColor: "#ffffff",
           pieLegendTextColor: palette.text,
           pieStrokeColor: palette.border,
-          // Git graphs: vibrant, high-visibility branch colors in dark and light modes
-          git0: dark ? palette.borders[0] ?? "#38bdf8" : palette.borders[0] ?? "#2563eb",
-          git1: dark ? palette.borders[1] ?? "#34d399" : palette.borders[1] ?? "#059669",
-          git2: dark ? palette.borders[2] ?? "#fbbf24" : palette.borders[2] ?? "#d97706",
-          git3: dark ? palette.borders[3] ?? "#a78bfa" : palette.borders[3] ?? "#7c3aed",
-          git4: dark ? palette.borders[4] ?? "#22d3ee" : palette.borders[4] ?? "#0891b2",
-          git5: dark ? palette.borders[5] ?? "#f472b6" : palette.borders[5] ?? "#db2777",
-          git6: dark ? palette.borders[0] ?? "#38bdf8" : palette.borders[0] ?? "#2563eb",
-          git7: dark ? palette.borders[1] ?? "#34d399" : palette.borders[1] ?? "#059669",
-          gitBranchLabel0: "#ffffff",
-          gitBranchLabel1: "#ffffff",
-          gitBranchLabel2: "#ffffff",
-          gitBranchLabel3: "#ffffff",
-          gitBranchLabel4: "#ffffff",
-          gitBranchLabel5: "#ffffff",
+          // Git graphs: luminous, high-visibility branch colors in dark and light modes
+          git0: dark ? "#7dd3fc" : "#2563eb",
+          git1: dark ? "#6ee7b7" : "#059669",
+          git2: dark ? "#fde047" : "#d97706",
+          git3: dark ? "#c4b5fd" : "#7c3aed",
+          git4: dark ? "#67e8f9" : "#0891b2",
+          git5: dark ? "#f472b6" : "#db2777",
+          git6: dark ? "#7dd3fc" : "#2563eb",
+          git7: dark ? "#6ee7b7" : "#059669",
+          gitBranchLabel0: dark ? "#0f172a" : "#ffffff",
+          gitBranchLabel1: dark ? "#0f172a" : "#ffffff",
+          gitBranchLabel2: dark ? "#0f172a" : "#ffffff",
+          gitBranchLabel3: dark ? "#0f172a" : "#ffffff",
+          gitBranchLabel4: dark ? "#0f172a" : "#ffffff",
+          gitBranchLabel5: dark ? "#0f172a" : "#ffffff",
           gitCommitLabelColor: "#ffffff",
           gitCommitLabelBackground: dark ? "#1e293b" : "#334155",
           tagLabelColor: "#ffffff",

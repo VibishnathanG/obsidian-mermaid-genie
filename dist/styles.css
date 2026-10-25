@@ -138,19 +138,51 @@
   overflow: visible !important;
 }
 
-/* Cynefin Framework: Centered matrix quadrant titles and items */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is([id*="Cynefin" i], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"]) :is(.cluster-label text, .cluster-label span, .cluster-label .nodeLabel, text.pele-cluster-label) {
+/* Centered Headings: Cynefin, Wardley, Architecture, and Treemap section headings */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(
+  [id*="Cynefin" i],
+  [id*="wardley" i],
+  g[data-id="Wardley"],
+  [id*="Complex" i],
+  [id*="Complicated" i],
+  [id*="Chaotic" i],
+  [id*="Clear" i],
+  [id*="Disorder" i],
+  g.cluster[id*="cloud"],
+  g.cluster[id*="arch"],
+  .pele-architecture .pele-cluster,
+  .pele-wardley,
+  g.treemapSection,
+  g.pele-section
+) :is(.cluster-label text, .cluster-label span, .cluster-label .nodeLabel, text.pele-cluster-label, text.pele-title, text.treemapSectionLabel, text:not(.pele-value):not(.treemapSectionValue)) {
   text-anchor: middle !important;
   text-align: center !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is([id*="Cynefin" i], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i]) .cluster-label foreignObject > div {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(
+  [id*="Cynefin" i],
+  [id*="wardley" i],
+  g[data-id="Wardley"],
+  [id*="Complex" i],
+  [id*="Complicated" i],
+  [id*="Chaotic" i],
+  [id*="Clear" i],
+  [id*="Disorder" i],
+  g.cluster[id*="cloud"],
+  g.cluster[id*="arch"]
+) .cluster-label foreignObject > div {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
   width: 100% !important;
+}
+
+/* Treemap section headers: centered alone */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(text.treemapSectionLabel, g.pele-section > text:not(.pele-value)) {
+  text-anchor: middle !important;
+  text-align: center !important;
 }
 
 /* --- Crisp, Clear Typography without any Text Truncation --- */
@@ -197,17 +229,12 @@
   text-anchor: middle !important;
 }
 
-/* Left-aligned member, attribute, field, and Kanban/Architecture/Wardley card text */
+/* Left-aligned member, attribute, field, and Kanban card text */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(
   .pele-kanban .pele-cluster-label,
   .pele-kanban text.pele-cluster-label,
   .kanban-header,
   .kanban-column .cluster-label text,
-  .pele-architecture .pele-cluster-label,
-  .pele-architecture text.pele-cluster-label,
-  [id*="wardley" i] .cluster-label text,
-  [id*="wardley" i] .cluster-label span,
-  g[data-id="Wardley"] .cluster-label text,
   .pele-card text,
   .pele-card .pele-label,
   .pele-card-label,
@@ -437,21 +464,29 @@
   fill: var(--mpe-text) !important;
 }
 
-/* Git Graphs: Vibrant, high-visibility branches, badges, and white text */
+/* Git Graphs: Luminous, high-visibility branches, badges, and crisp text */
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) line[class*="branch"],
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path[class*="branch"],
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path[class*="arrow"] {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path[class*="arrow"],
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path.pele-lane,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path.pele-edge {
   stroke-width: 2.5px !important;
   opacity: 1 !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel) {
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-branch text) {
+  fill: #0f172a !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-branch text) {
   fill: #ffffff !important;
   color: #ffffff !important;
   font-weight: 700 !important;
 }
 
-.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) rect.commit-label-bkg {
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(rect.commit-label-bkg, .pele-commit-label rect) {
   fill: #222e3e !important;
   stroke: #64748b !important;
   stroke-width: 1.25px !important;
@@ -460,7 +495,7 @@
   opacity: 0.96 !important;
 }
 
-.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) rect.commit-label-bkg {
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(rect.commit-label-bkg, .pele-commit-label rect) {
   fill: #ffffff !important;
   stroke: #94a3b8 !important;
   stroke-width: 1.25px !important;
@@ -469,21 +504,21 @@
   opacity: 0.96 !important;
 }
 
-.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) text.commit-label {
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(text.commit-label, .pele-commit-label text) {
   fill: #ffffff !important;
   color: #ffffff !important;
   font-weight: 600 !important;
   font-size: 12.5px !important;
 }
 
-.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) text.commit-label {
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(text.commit-label, .pele-commit-label text) {
   fill: #0f172a !important;
   color: #0f172a !important;
   font-weight: 600 !important;
   font-size: 12.5px !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) circle[class*="commit"] {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(circle[class*="commit"], .pele-commit circle) {
   stroke: #ffffff !important;
   stroke-width: 2px !important;
 }

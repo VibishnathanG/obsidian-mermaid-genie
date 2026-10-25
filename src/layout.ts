@@ -1358,7 +1358,7 @@ export function fixTreemapDiagram(doc: Document, palette: PaletteData, dark: boo
       headerRect.setAttribute('ry', '4');
     }
 
-    const secRect = section.querySelector('rect.treemapSection:not(.section0)') as SVGRectElement | null;
+    const secRect = section.querySelector('rect.treemapSection:not(.section0), rect.treemapSectionHeader, :scope > rect') as SVGRectElement | null;
     if (secRect) {
       secRect.setAttribute('stroke', palette.border);
       secRect.setAttribute('stroke-width', '1.5px');
@@ -1373,6 +1373,19 @@ export function fixTreemapDiagram(doc: Document, palette: PaletteData, dark: boo
       secLabel.setAttribute('font-size', '13px');
       const sy = parseFloat(secLabel.getAttribute('y') || '0');
       if (sy < 15) secLabel.setAttribute('y', '15');
+      if (secRect) {
+        const rx = parseFloat(secRect.getAttribute('x') || '0');
+        const rw = parseFloat(secRect.getAttribute('width') || '0');
+        if (rw > 0) {
+          const cx = rx + rw / 2;
+          secLabel.setAttribute('x', String(cx));
+          secLabel.setAttribute('text-anchor', 'middle');
+          if (secLabel.style) {
+            secLabel.style.setProperty('text-anchor', 'middle', 'important');
+            secLabel.style.setProperty('text-align', 'center', 'important');
+          }
+        }
+      }
     }
 
     const secValue = section.querySelector('text.treemapSectionValue') as SVGTextElement | null;
@@ -1535,21 +1548,22 @@ export function fixPieChart(doc: Document, palette: PaletteData, dark: boolean):
 }
 
 /**
- * Redesigns Git graphs with high visibility, crisp white text, coordinated vibrant branch colors, and styled commit badges.
+ * Redesigns Git graphs with high visibility, crisp text, coordinated luminous branch colors, and styled commit badges.
  */
 export function fixGitGraph(doc: Document, palette: PaletteData, dark: boolean): void {
   const root = doc.documentElement;
-  const isGit = root.classList.contains('gitGraph') || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, [class*="branch0"]');
+  const isGit = root.classList.contains('gitGraph') || root.classList.contains('pele-gitGraph') ||
+    !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, g.pele-branch, [class*="branch0"]');
   if (!isGit) return;
 
   const branchColors = dark
-    ? (palette.borders.length >= 6 ? palette.borders : ['#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#22d3ee', '#f472b6'])
-    : (palette.borders.length >= 6 ? palette.borders : ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777']);
+    ? ['#7dd3fc', '#6ee7b7', '#fde047', '#c4b5fd', '#67e8f9', '#f472b6']
+    : ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777'];
 
   // 1. Branch guide lines: distinct visible branch colors
   for (let b = 0; b < 10; b++) {
     const branchColor = branchColors[b % branchColors.length]!;
-    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}, path.branch.branch${b}, path.branch${b}`)) {
+    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}, path.branch.branch${b}, path.branch${b}, path.pele-lane`)) {
       line.setAttribute('stroke', branchColor);
       line.setAttribute('stroke-width', '2.5px');
       line.setAttribute('stroke-dasharray', 'none');
@@ -1578,10 +1592,11 @@ export function fixGitGraph(doc: Document, palette: PaletteData, dark: boolean):
       }
     }
     for (const btext of doc.querySelectorAll(`.branch-label${b} text, .branch-label${b}`)) {
-      btext.setAttribute('fill', '#ffffff');
+      const textColor = dark ? '#0f172a' : '#ffffff';
+      btext.setAttribute('fill', textColor);
       if ((btext as HTMLElement).style) {
-        (btext as HTMLElement).style.setProperty('fill', '#ffffff', 'important');
-        (btext as HTMLElement).style.setProperty('color', '#ffffff', 'important');
+        (btext as HTMLElement).style.setProperty('fill', textColor, 'important');
+        (btext as HTMLElement).style.setProperty('color', textColor, 'important');
         (btext as HTMLElement).style.setProperty('font-weight', '700', 'important');
       }
     }
@@ -2194,8 +2209,27 @@ export function styleSvg(
   fixPieChart(doc, palette, dark);
   fixGitGraph(doc, palette, dark);
 
-  // Ensure Cynefin Framework matrix quadrant titles and items are centered
-  for (const cl of doc.querySelectorAll(':is([id*="Cynefin" i], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"]) :is(.cluster-label text, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel, text.pele-cluster-label)')) {
+  // Center cluster titles for Cynefin, Wardley Map, and Architecture Diagram
+  for (const cluster of doc.querySelectorAll('g.cluster[id*="wardley" i], g.pele-cluster[data-id="Wardley"], g.cluster[id*="cloud"], g.cluster[id*="arch"]')) {
+    const rect = cluster.querySelector(':scope > rect, rect') as SVGRectElement | null;
+    const label = cluster.querySelector('.cluster-label text, .cluster-label span, text.pele-cluster-label, .cluster-label .nodeLabel, text.pele-title');
+    if (rect && label) {
+      const rx = parseFloat(rect.getAttribute('x') || '0');
+      const rw = parseFloat(rect.getAttribute('width') || '0');
+      if (rw > 0) {
+        const cx = rx + rw / 2;
+        label.setAttribute('x', String(cx));
+        label.setAttribute('text-anchor', 'middle');
+        if ((label as HTMLElement).style) {
+          (label as HTMLElement).style.setProperty('text-anchor', 'middle', 'important');
+          (label as HTMLElement).style.setProperty('text-align', 'center', 'important');
+        }
+      }
+    }
+  }
+
+  // Ensure Cynefin, Wardley, Architecture, and matrix quadrant titles are centered
+  for (const cl of doc.querySelectorAll(':is([id*="Cynefin" i], [id*="wardley" i], g[data-id="Wardley"], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"], g.cluster[id*="cloud"], g.cluster[id*="arch"]) :is(.cluster-label text, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel, text.pele-cluster-label)')) {
     cl.setAttribute('text-anchor', 'middle');
     if ((cl as HTMLElement).style) {
       (cl as HTMLElement).style.setProperty('text-anchor', 'middle', 'important');
