@@ -1255,26 +1255,46 @@ function extractGraphFromSvg(doc) {
   const nodes = [];
   const edges = [];
   const seenNodes = /* @__PURE__ */ new Set();
-  for (const cluster of doc.querySelectorAll("g.cluster")) {
-    const rawId = cluster.getAttribute("id") || "";
+  const clusterBoxes = [];
+  for (const cluster of doc.querySelectorAll("g.cluster, g.pele-cluster")) {
+    const rawId = cluster.getAttribute("id") || cluster.getAttribute("data-id") || "";
     const id2 = flowchartSourceId(rawId, diagramId);
     if (!id2 || seenNodes.has(id2)) continue;
     seenNodes.add(id2);
-    const parentCluster = cluster.parentElement?.closest("g.cluster");
-    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute("id") || "", diagramId) : void 0;
+    const parentCluster = cluster.parentElement?.closest("g.cluster, g.pele-cluster");
+    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute("id") || parentCluster.getAttribute("data-id") || "", diagramId) : void 0;
     nodes.push({ id: id2, parentId, isGroup: true });
+    const rect = cluster.querySelector(":scope > rect, rect");
+    if (rect) {
+      const rx2 = parseFloat(rect.getAttribute("x") || "0");
+      const ry2 = parseFloat(rect.getAttribute("y") || "0");
+      const rw2 = parseFloat(rect.getAttribute("width") || "0");
+      const rh2 = parseFloat(rect.getAttribute("height") || "0");
+      clusterBoxes.push({ id: id2, box: [rx2, ry2, rx2 + rw2, ry2 + rh2] });
+    }
   }
-  for (const node of doc.querySelectorAll("g.node")) {
-    const rawId = node.getAttribute("data-mpe-key") || node.getAttribute("id") || "";
+  for (const node of doc.querySelectorAll("g.node, g.pele-node")) {
+    const rawId = node.getAttribute("data-mpe-key") || node.getAttribute("data-id") || node.getAttribute("id") || "";
     const id2 = flowchartSourceId(rawId, diagramId);
     if (!id2 || seenNodes.has(id2)) continue;
     seenNodes.add(id2);
-    const parentCluster = node.closest("g.cluster");
-    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute("id") || "", diagramId) : void 0;
+    const parentCluster = node.closest("g.cluster, g.pele-cluster");
+    let parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute("id") || parentCluster.getAttribute("data-id") || "", diagramId) : void 0;
+    if (!parentId && clusterBoxes.length > 0) {
+      const t = (node.getAttribute("transform") || "").match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (t) {
+        const nx2 = parseFloat(t[1]);
+        const ny2 = parseFloat(t[2]);
+        const matched = clusterBoxes.find((c) => nx2 >= c.box[0] && nx2 <= c.box[2] && ny2 >= c.box[1] && ny2 <= c.box[3]);
+        if (matched) {
+          parentId = matched.id;
+        }
+      }
+    }
     nodes.push({ id: id2, parentId });
   }
   const seenEdges = /* @__PURE__ */ new Set();
-  const linkElements = doc.querySelectorAll("path.flowchart-link, .edgePath path.path, g.edgePath");
+  const linkElements = doc.querySelectorAll("path.flowchart-link, .edgePath path.path, g.edgePath, g.pele-edge");
   for (const el2 of linkElements) {
     let from = el2.getAttribute("data-mpe-from");
     let to2 = el2.getAttribute("data-mpe-to");
@@ -1288,7 +1308,7 @@ function extractGraphFromSvg(doc) {
       }
     }
     if (!from || !to2) {
-      const idStr = el2.getAttribute("id") || el2.parentElement?.getAttribute("id") || "";
+      const idStr = el2.getAttribute("id") || el2.getAttribute("data-id") || el2.parentElement?.getAttribute("id") || el2.parentElement?.getAttribute("data-id") || "";
       const idMatch = /^L[_-](.+?)[_-](.+?)[_-]\d+$/.exec(idStr);
       if (idMatch) {
         from = flowchartSourceId(idMatch[1], diagramId);
@@ -1316,37 +1336,47 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
   const groups = colorStyle === "multi" ? flowchartGroups(nodes, edges) : void 0;
   const fills = palette.fills;
   const borders = palette.borders;
-  for (const cluster of root.querySelectorAll("g.cluster")) {
-    const rawId = cluster.getAttribute("id") || "";
+  for (const cluster of root.querySelectorAll("g.cluster, g.pele-cluster")) {
+    const rawId = cluster.getAttribute("id") || cluster.getAttribute("data-id") || "";
     const id2 = flowchartSourceId(rawId, diagramId);
     const slot = groups?.get(id2) ?? 0;
     const clusterFill = colorStyle === "multi" && fills.length > 0 ? fills[slot % fills.length] : palette.clusterBkg;
     const clusterBorder = colorStyle === "multi" && borders.length > 0 ? borders[slot % borders.length] : palette.clusterBorder;
-    const clusterShapes = Array.from(cluster.querySelectorAll(":scope > rect, :scope > path"));
+    const hCluster = cluster;
+    if (hCluster && hCluster.style) {
+      hCluster.style.setProperty("--cluster-fill", clusterFill ?? "transparent");
+      hCluster.style.setProperty("--cluster-border", clusterBorder ?? "transparent");
+    }
+    const clusterShapes = Array.from(cluster.querySelectorAll(":scope > rect, :scope > path, rect"));
     for (const shape of clusterShapes) {
-      if (shape.style) {
-        if (!shape.style.fill && clusterFill) {
-          shape.style.fill = clusterFill;
-          shape.style.fillOpacity = dark ? "0.22" : "0.35";
+      if (clusterFill) {
+        shape.setAttribute("fill", clusterFill);
+        shape.setAttribute("fill-opacity", dark ? "0.20" : "0.30");
+        if (shape.style) {
+          shape.style.setProperty("fill", clusterFill, "important");
+          shape.style.setProperty("fill-opacity", dark ? "0.20" : "0.30", "important");
         }
-        if (!shape.style.stroke && clusterBorder) {
-          shape.style.stroke = clusterBorder;
-          shape.style.strokeWidth = "1.2px";
-        }
-      } else {
-        if (clusterFill) {
-          shape.setAttribute("fill", clusterFill);
-          shape.setAttribute("fill-opacity", dark ? "0.22" : "0.35");
-        }
-        if (clusterBorder) {
-          shape.setAttribute("stroke", clusterBorder);
-          shape.setAttribute("stroke-width", "1.2px");
+      }
+      if (clusterBorder) {
+        shape.setAttribute("stroke", clusterBorder);
+        shape.setAttribute("stroke-width", "1.5px");
+        if (shape.style) {
+          shape.style.setProperty("stroke", clusterBorder, "important");
+          shape.style.setProperty("stroke-width", "1.5px", "important");
         }
       }
     }
+    for (const label of Array.from(cluster.querySelectorAll(".pele-cluster-label, text.cluster-label, .cluster-label text, .cluster-label span, .cluster-label div"))) {
+      label.setAttribute("fill", palette.text);
+      if (label.style) {
+        label.style.setProperty("fill", palette.text, "important");
+        label.style.setProperty("color", palette.text, "important");
+        label.style.fontWeight = "bold";
+      }
+    }
   }
-  for (const node of Array.from(root.querySelectorAll("g.node"))) {
-    const rawId = node.getAttribute("data-mpe-key") || node.getAttribute("id") || "";
+  for (const node of Array.from(root.querySelectorAll("g.node, g.pele-node"))) {
+    const rawId = node.getAttribute("data-mpe-key") || node.getAttribute("data-id") || node.getAttribute("id") || "";
     const id2 = flowchartSourceId(rawId, diagramId);
     const slot = groups?.get(id2) ?? 0;
     const fill = colorStyle === "multi" && fills.length > 0 ? fills[slot % fills.length] : palette.surface;
@@ -1360,31 +1390,24 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
     const shapeElements = Array.from(node.querySelectorAll(":scope > .label-container, :scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path"));
     const shapes = (shapeElements.length > 0 ? shapeElements : Array.from(node.querySelectorAll("rect, polygon, circle, ellipse, path"))).filter((shape) => !shape.closest(".label, .nodeLabel, foreignObject") && !shape.classList.contains("arrowMarkerPath"));
     for (const shape of shapes) {
+      const isNoneFill = shape.getAttribute("fill") === "none" || shape.style?.fill === "none";
+      if (!isNoneFill) {
+        shape.setAttribute("fill", fill);
+        if (shape.style) shape.style.setProperty("fill", fill);
+      }
+      shape.setAttribute("stroke", border);
+      shape.setAttribute("stroke-width", "1.25px");
       if (shape.style) {
-        if (!shape.style.fill && shape.getAttribute("fill") !== "none") {
-          shape.style.fill = fill;
-        }
-        if (!shape.style.stroke) {
-          shape.style.stroke = border;
-          shape.style.strokeWidth = "1.25px";
-        }
-      } else {
-        if (!shape.getAttribute("fill") && shape.getAttribute("fill") !== "none") {
-          shape.setAttribute("fill", fill);
-        }
-        if (!shape.getAttribute("stroke")) {
-          shape.setAttribute("stroke", border);
-          shape.setAttribute("stroke-width", "1.25px");
-        }
+        shape.style.setProperty("stroke", border);
+        shape.style.setProperty("stroke-width", "1.25px");
       }
     }
-    for (const textEl of Array.from(node.querySelectorAll(".nodeLabel, .label text, text, .nodeLabel p, foreignObject div"))) {
+    for (const textEl of Array.from(node.querySelectorAll(".nodeLabel, .label text, text, .nodeLabel p, foreignObject div, .pele-label"))) {
       if ("style" in textEl && textEl.style) {
-        textEl.style.color = textColor;
-        textEl.style.fill = textColor;
-      } else if (textEl.setAttribute) {
-        textEl.setAttribute("fill", textColor);
+        textEl.style.setProperty("color", textColor, "important");
+        textEl.style.setProperty("fill", textColor, "important");
       }
+      textEl.setAttribute("fill", textColor);
     }
   }
 }
@@ -2100,6 +2123,8 @@ function fixGanttChart(doc, palette, dark) {
     }
   }
   const isMulti = palette.fills.length > 0;
+  const darkMutedFills = dark ? palette.fills : ["#25446b", "#1e4d41", "#544122", "#453361", "#214957", "#563347"];
+  const darkMutedBorders = palette.borders;
   let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute("class") || "";
@@ -2116,9 +2141,9 @@ function fixGanttChart(doc, palette, dark) {
       rect.setAttribute("rx", "4");
       rect.setAttribute("ry", "4");
     } else if (!cls.includes("milestone")) {
-      const slot = taskBarIdx % (palette.fills.length || 1);
-      const fill = isMulti ? palette.fills[slot] : palette.surface;
-      const stroke = isMulti ? palette.borders[slot] : palette.border;
+      const slot = taskBarIdx % (darkMutedFills.length || 1);
+      const fill = isMulti ? darkMutedFills[slot] : palette.surface;
+      const stroke = isMulti ? darkMutedBorders[slot % darkMutedBorders.length] : palette.border;
       taskBarIdx++;
       rect.setAttribute("fill", fill);
       rect.setAttribute("stroke", stroke);
@@ -2181,13 +2206,14 @@ function fixGanttChart(doc, palette, dark) {
       text.setAttribute("text-anchor", "middle");
       text.classList.remove("taskTextOutsideRight", "taskTextOutsideLeft", "taskTextOutside");
       text.classList.add("taskText");
-      const rectFill = matchedRect.getAttribute("fill") || palette.surface;
-      const fillCol = textOnFill(rectFill, palette.text);
+      const isActive = matchedRect.classList.contains("active") || text.classList.contains("active") || /activeText/i.test(text.getAttribute("class") || "");
+      const fillCol = isActive ? activeTextColor : "#ffffff";
       text.setAttribute("fill", fillCol);
       if (text.style) {
         text.style.setProperty("fill", fillCol, "important");
         text.style.setProperty("color", fillCol, "important");
         text.style.setProperty("text-anchor", "middle", "important");
+        text.style.fontWeight = "600";
       }
     } else {
       text.setAttribute("fill", palette.text);
@@ -2201,9 +2227,10 @@ function fixGanttChart(doc, palette, dark) {
     line.setAttribute("stroke", palette.border);
     line.setAttribute("stroke-opacity", "0.45");
   }
-  for (const sec of doc.querySelectorAll(".section0, .section1, .section2, .section3")) {
-    sec.setAttribute("fill", palette.clusterBkg ?? (dark ? "#182230" : "#f8fafc"));
-    sec.setAttribute("fill-opacity", "0.35");
+  for (const sec of doc.querySelectorAll(".section0, .section1, .section2, .section3, rect.section")) {
+    sec.setAttribute("fill", "none");
+    sec.setAttribute("stroke", "none");
+    sec.setAttribute("fill-opacity", "0");
   }
 }
 function fixClassDiagram(doc, palette, _dark) {
@@ -2326,9 +2353,16 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
     if (stroke && stroke !== "none") path.setAttribute("stroke", palette.border);
     else path.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
   }
-  for (const divider of doc.querySelectorAll("g.divider path, line.divider")) {
+  for (const divider of doc.querySelectorAll('g.divider path, line.divider, path.pele-er-divider, [class*="divider"]')) {
     divider.setAttribute("stroke", palette.border);
-    divider.setAttribute("stroke-width", "1px");
+    divider.setAttribute("stroke-width", "1.5px");
+    divider.setAttribute("fill", "none");
+    if (divider.style) {
+      divider.style.setProperty("stroke", palette.border, "important");
+      divider.style.setProperty("stroke-width", "1.5px", "important");
+      divider.style.setProperty("fill", "none", "important");
+      divider.style.setProperty("display", "block", "important");
+    }
   }
   for (const title of doc.querySelectorAll("g.label.name, text.entityLabel, .name .nodeLabel, .name p")) {
     title.setAttribute("fill", palette.text);
@@ -24276,6 +24310,10 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     root.style.setProperty("--pele-accent", palette.accent);
     root.style.setProperty("--pele-radius", `${settings.nodeRadius}px`);
     root.style.setProperty("--pele-font", '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif');
+    for (let s = 0; s < 12; s++) {
+      const sFill = palette.fills[s % palette.fills.length] ?? palette.accent;
+      root.style.setProperty(`--pele-series-${s + 1}`, sFill);
+    }
     root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 180}ms`);
     root.style.setProperty("--mpe-highlight", palette.accent);
     root.style.setProperty("--mpe-line", palette.line);
@@ -24343,6 +24381,9 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const isPelePacket = root.classList.contains("pele-packet") || root.getAttribute("aria-roledescription") === "packet";
   const isPeleBlock = root.classList.contains("pele-block") || root.getAttribute("aria-roledescription") === "block";
   const isPeleC4 = root.classList.contains("pele-c4") || root.getAttribute("aria-roledescription") === "c4";
+  const isPeleArch = root.classList.contains("pele-architecture") || root.getAttribute("aria-roledescription") === "architecture";
+  const isPeleTimeline = root.classList.contains("pele-timeline") || root.getAttribute("aria-roledescription") === "timeline";
+  const isPeleJourney = root.classList.contains("pele-journey") || root.getAttribute("aria-roledescription") === "journey";
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
@@ -24401,6 +24442,10 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       const stroke = palette.borders[slot] ?? palette.border;
       const textColor = textOnFill(fill, palette.text);
       setNodeVars(node, fill, stroke, textColor);
+      const allRects = Array.from(node.querySelectorAll(":scope > rect"));
+      for (let r = 1; r < allRects.length; r++) {
+        allRects[r].remove();
+      }
       const rect = node.querySelector(":scope > rect");
       if (rect) {
         rect.setAttribute("fill", fill);
@@ -24416,9 +24461,12 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       for (const divider of Array.from(node.querySelectorAll(".pele-er-divider, path.pele-er-divider"))) {
         divider.setAttribute("fill", "none");
         divider.setAttribute("stroke", stroke);
-        divider.setAttribute("stroke-width", "1.25px");
+        divider.setAttribute("stroke-width", "1.5px");
         setElStyle(divider, "fill", "none", true);
         setElStyle(divider, "stroke", stroke, true);
+        setElStyle(divider, "stroke-width", "1.5px", true);
+        setElStyle(divider, "display", "block", true);
+        node.appendChild(divider);
       }
       const stripes = Array.from(node.querySelectorAll("g.pele-er-stripes rect"));
       for (let s = 0; s < stripes.length; s++) {
@@ -24447,6 +24495,14 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
   }
   if (isPeleGantt) {
+    for (const sec of Array.from(doc.querySelectorAll(".pele-sections rect, rect.pele-section"))) {
+      sec.setAttribute("fill", "none");
+      sec.setAttribute("stroke", "none");
+      setElStyle(sec, "fill", "none", true);
+      setElStyle(sec, "stroke", "none", true);
+    }
+    const darkMutedFills = dark ? palette.fills : ["#25446b", "#1e4d41", "#544122", "#453361", "#214957", "#563347"];
+    const darkMutedBorders = palette.borders;
     let taskBarIdx = 0;
     for (const taskGroup of Array.from(doc.querySelectorAll("g.pele-task"))) {
       const isMilestone = taskGroup.classList.contains("pele-milestone") || !!taskGroup.querySelector("path");
@@ -24477,11 +24533,10 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         rw2 = minWidth;
         rect.setAttribute("width", String(rw2));
       }
-      const slot = taskBarIdx % (palette.fills.length || 1);
+      const slot = taskBarIdx % (darkMutedFills.length || 1);
       taskBarIdx++;
-      const barFill = isActive ? palette.accent : palette.fills[slot] ?? palette.surface;
-      const barStroke = isActive ? palette.accent : palette.borders[slot] ?? palette.border;
-      const textColor = textOnFill(barFill, palette.text);
+      const barFill = isActive ? palette.accent : darkMutedFills[slot] ?? palette.surface;
+      const barStroke = isActive ? palette.accent : darkMutedBorders[slot % darkMutedBorders.length] ?? palette.border;
       rect.setAttribute("fill", barFill);
       rect.setAttribute("stroke", barStroke);
       rect.setAttribute("stroke-width", "1.25px");
@@ -24496,6 +24551,8 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       text.setAttribute("x", String(cx2));
       text.setAttribute("y", String(cy2));
       text.setAttribute("text-anchor", "middle");
+      const activeTextColor = dark ? "#0f172a" : "#ffffff";
+      const textColor = isActive ? activeTextColor : "#ffffff";
       text.setAttribute("fill", textColor);
       text.setAttribute("font-weight", "600");
       setElStyle(text, "fill", textColor, true);
@@ -24504,6 +24561,9 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
     }
     for (const title of Array.from(doc.querySelectorAll(".pele-title, .pele-section-label, .pele-axis text"))) {
       title.setAttribute("fill", palette.text);
+      if (title.classList.contains("pele-section-label")) {
+        setElStyle(title, "font-weight", "600");
+      }
     }
   }
   if (isPeleReq) {
@@ -24769,6 +24829,258 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         } else {
           text.setAttribute("fill", textColor);
         }
+      }
+    }
+  }
+  if (isPeleArch) {
+    const clusters = Array.from(doc.querySelectorAll("g.pele-cluster"));
+    for (let c = 0; c < clusters.length; c++) {
+      const cluster = clusters[c];
+      const slot = c % (palette.fills.length || 1);
+      const clusterFill = palette.clusterBkg ?? (dark ? "#1a2333" : "#f8fafc");
+      const clusterBorder = palette.borders[slot] ?? palette.border;
+      const rect = cluster.querySelector(":scope > rect, rect");
+      if (rect) {
+        rect.setAttribute("fill", clusterFill);
+        rect.setAttribute("fill-opacity", dark ? "0.45" : "0.65");
+        rect.setAttribute("stroke", clusterBorder);
+        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("rx", "8");
+        rect.setAttribute("ry", "8");
+        if (rect.style) {
+          rect.style.fill = clusterFill;
+          rect.style.stroke = clusterBorder;
+        }
+      }
+      const label = cluster.querySelector(".pele-cluster-label");
+      if (label) {
+        label.setAttribute("fill", palette.text);
+        setElStyle(label, "fill", palette.text, true);
+        setElStyle(label, "font-weight", "bold");
+      }
+      const icon = cluster.querySelector("svg.pele-icon path");
+      if (icon) {
+        icon.setAttribute("stroke", clusterBorder);
+        setElStyle(icon, "stroke", clusterBorder, true);
+      }
+    }
+    const services = Array.from(doc.querySelectorAll("g.pele-service, g.pele-nodes > g.pele-node"));
+    for (let s = 0; s < services.length; s++) {
+      const service = services[s];
+      const slot = s % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const iconColor = textOnFill(fill, palette.text);
+      setNodeVars(service, fill, stroke, palette.text);
+      const rect = service.querySelector(":scope > rect, rect");
+      if (rect) {
+        rect.setAttribute("fill", fill);
+        rect.setAttribute("stroke", stroke);
+        rect.setAttribute("stroke-width", "1.5px");
+        rect.setAttribute("rx", "6");
+        rect.setAttribute("ry", "6");
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+      for (const iconPath of Array.from(service.querySelectorAll("svg.pele-icon path"))) {
+        iconPath.setAttribute("stroke", iconColor);
+        setElStyle(iconPath, "stroke", iconColor, true);
+      }
+      const label = service.querySelector("text.pele-label, text");
+      if (label) {
+        label.setAttribute("fill", palette.text);
+        setElStyle(label, "fill", palette.text, true);
+        setElStyle(label, "font-weight", "500");
+      }
+    }
+    for (const edge of Array.from(doc.querySelectorAll("g.pele-edge path"))) {
+      edge.setAttribute("stroke", palette.line);
+      edge.setAttribute("stroke-width", "1.5px");
+    }
+  }
+  if (isPeleTimeline) {
+    const title = doc.querySelector(".pele-title, text.pele-title tspan");
+    if (title) {
+      title.setAttribute("fill", palette.text);
+      setElStyle(title, "fill", palette.text, true);
+    }
+    const axis2 = doc.querySelector("path.pele-axis");
+    if (axis2) {
+      axis2.setAttribute("stroke", palette.line);
+      setElStyle(axis2, "stroke", palette.line, true);
+    }
+    const marker = doc.querySelector("path.pele-marker");
+    if (marker) {
+      marker.setAttribute("fill", palette.line);
+      setElStyle(marker, "fill", palette.line, true);
+    }
+    const periods = Array.from(doc.querySelectorAll("g.pele-period"));
+    for (let p = 0; p < periods.length; p++) {
+      const period = periods[p];
+      const slot = p % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const periodTextColor = textOnFill(fill, palette.text);
+      const pRect = period.querySelector(":scope > rect");
+      if (pRect) {
+        pRect.setAttribute("fill", fill);
+        pRect.setAttribute("stroke", stroke);
+        pRect.setAttribute("stroke-width", "1.25px");
+        pRect.setAttribute("rx", "4");
+        pRect.setAttribute("ry", "4");
+        if (pRect.style) {
+          pRect.style.fill = fill;
+          pRect.style.stroke = stroke;
+        }
+      }
+      const pText = period.querySelector(":scope > text");
+      if (pText) {
+        pText.setAttribute("fill", periodTextColor);
+        setElStyle(pText, "fill", periodTextColor, true);
+        setElStyle(pText, "font-weight", "bold");
+      }
+      const stem = period.querySelector(":scope > path.pele-edge");
+      if (stem) {
+        stem.setAttribute("stroke", stroke);
+        stem.setAttribute("stroke-width", "1.5px");
+        setElStyle(stem, "stroke", stroke, true);
+      }
+      const dot = period.querySelector(":scope > circle.pele-dot");
+      if (dot) {
+        dot.setAttribute("fill", fill);
+        dot.setAttribute("stroke", dark ? palette.background : "#ffffff");
+        dot.setAttribute("stroke-width", "2px");
+        setElStyle(dot, "fill", fill, true);
+        setElStyle(dot, "stroke", dark ? palette.background : "#ffffff", true);
+      }
+      const events = Array.from(period.querySelectorAll("g.pele-event"));
+      for (let e = 0; e < events.length; e++) {
+        const evt = events[e];
+        const eRect = evt.querySelector("rect");
+        if (eRect) {
+          eRect.setAttribute("fill", fill);
+          eRect.setAttribute("fill-opacity", dark ? "0.28" : "0.18");
+          eRect.setAttribute("stroke", stroke);
+          eRect.setAttribute("stroke-width", "1.25px");
+          eRect.setAttribute("rx", "4");
+          eRect.setAttribute("ry", "4");
+          if (eRect.style) {
+            eRect.style.fill = fill;
+            eRect.style.stroke = stroke;
+          }
+        }
+        const eText = evt.querySelector("text");
+        if (eText) {
+          eText.setAttribute("fill", palette.text);
+          setElStyle(eText, "fill", palette.text, true);
+        }
+      }
+    }
+  }
+  if (isPeleJourney) {
+    const title = doc.querySelector(".pele-title, text.pele-title tspan");
+    if (title) {
+      title.setAttribute("fill", palette.text);
+      setElStyle(title, "fill", palette.text, true);
+    }
+    for (const grid of Array.from(doc.querySelectorAll("path.pele-grid"))) {
+      grid.setAttribute("stroke", palette.border);
+      grid.setAttribute("stroke-opacity", "0.35");
+    }
+    for (const scale of Array.from(doc.querySelectorAll(".pele-scale text"))) {
+      scale.setAttribute("fill", palette.text);
+    }
+    for (const stem of Array.from(doc.querySelectorAll("path.pele-stems"))) {
+      stem.setAttribute("stroke", palette.line);
+      stem.setAttribute("stroke-opacity", "0.5");
+    }
+    for (const edge of Array.from(doc.querySelectorAll("path.pele-edge"))) {
+      edge.setAttribute("stroke", palette.accent);
+      edge.setAttribute("stroke-width", "2px");
+    }
+    const sections = Array.from(doc.querySelectorAll("g.pele-section"));
+    for (let s = 0; s < sections.length; s++) {
+      const sec = sections[s];
+      const slot = s % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+      const secRect = sec.querySelector(":scope > rect");
+      if (secRect) {
+        secRect.setAttribute("fill", fill);
+        secRect.setAttribute("stroke", stroke);
+        secRect.setAttribute("stroke-width", "1.25px");
+        secRect.setAttribute("rx", "6");
+        secRect.setAttribute("ry", "6");
+        if (secRect.style) {
+          secRect.style.fill = fill;
+          secRect.style.stroke = stroke;
+        }
+      }
+      const secText = sec.querySelector(":scope > text");
+      if (secText) {
+        secText.setAttribute("fill", textColor);
+        setElStyle(secText, "fill", textColor, true);
+        setElStyle(secText, "font-weight", "bold");
+        const tspan = secText.querySelector("tspan");
+        if (tspan) {
+          tspan.setAttribute("fill", textColor);
+          setElStyle(tspan, "fill", textColor, true);
+        }
+      }
+      const tasks = Array.from(sec.querySelectorAll("g.pele-task"));
+      for (let t = 0; t < tasks.length; t++) {
+        const task = tasks[t];
+        const tRect = task.querySelector("rect");
+        if (tRect) {
+          tRect.setAttribute("fill", fill);
+          tRect.setAttribute("fill-opacity", dark ? "0.28" : "0.18");
+          tRect.setAttribute("stroke", stroke);
+          tRect.setAttribute("stroke-width", "1.25px");
+          tRect.setAttribute("rx", "4");
+          tRect.setAttribute("ry", "4");
+          if (tRect.style) {
+            tRect.style.fill = fill;
+            tRect.style.stroke = stroke;
+          }
+        }
+        const tText = task.querySelector("text");
+        if (tText) {
+          tText.setAttribute("fill", palette.text);
+          setElStyle(tText, "fill", palette.text, true);
+        }
+      }
+    }
+    const actorMap = /* @__PURE__ */ new Map();
+    let actorCount = 0;
+    for (const actor of Array.from(doc.querySelectorAll("circle.pele-actor"))) {
+      const actorName = actor.querySelector("title")?.textContent || actor.getAttribute("data-id") || "";
+      if (actorName && !actorMap.has(actorName)) {
+        actorMap.set(actorName, actorCount++);
+      }
+      const aSlot = (actorMap.get(actorName) ?? 0) % (palette.fills.length || 1);
+      const aCol = palette.fills[aSlot] ?? palette.accent;
+      const aBorder = palette.borders[aSlot % palette.borders.length] ?? palette.border;
+      actor.setAttribute("fill", aCol);
+      actor.setAttribute("stroke", aBorder);
+      setElStyle(actor, "fill", aCol, true);
+      setElStyle(actor, "stroke", aBorder, true);
+    }
+    for (const legItem of Array.from(doc.querySelectorAll("g.pele-legend-item"))) {
+      const id3 = legItem.getAttribute("data-id") || "";
+      const aSlot = (actorMap.get(id3) ?? 0) % (palette.fills.length || 1);
+      const aCol = palette.fills[aSlot] ?? palette.accent;
+      const dot = legItem.querySelector("circle");
+      if (dot) {
+        dot.setAttribute("fill", aCol);
+        setElStyle(dot, "fill", aCol, true);
+      }
+      const txt = legItem.querySelector("text");
+      if (txt) {
+        txt.setAttribute("fill", palette.text);
+        setElStyle(txt, "fill", palette.text, true);
       }
     }
   }

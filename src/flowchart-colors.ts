@@ -20,30 +20,56 @@ export function extractGraphFromSvg(doc: Document | Element): { nodes: Flowchart
   const seenNodes = new Set<string>();
 
   // Extract cluster subgraphs
-  for (const cluster of doc.querySelectorAll('g.cluster')) {
-    const rawId = cluster.getAttribute('id') || '';
+  const clusterBoxes: Array<{ id: string; box: [number, number, number, number] }> = [];
+  for (const cluster of doc.querySelectorAll('g.cluster, g.pele-cluster')) {
+    const rawId = cluster.getAttribute('id') || cluster.getAttribute('data-id') || '';
     const id = flowchartSourceId(rawId, diagramId);
     if (!id || seenNodes.has(id)) continue;
     seenNodes.add(id);
-    const parentCluster = cluster.parentElement?.closest('g.cluster');
-    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute('id') || '', diagramId) : undefined;
+    const parentCluster = cluster.parentElement?.closest('g.cluster, g.pele-cluster');
+    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute('id') || parentCluster.getAttribute('data-id') || '', diagramId) : undefined;
     nodes.push({ id, parentId, isGroup: true });
+
+    const rect = cluster.querySelector(':scope > rect, rect');
+    if (rect) {
+      const rx = parseFloat(rect.getAttribute('x') || '0');
+      const ry = parseFloat(rect.getAttribute('y') || '0');
+      const rw = parseFloat(rect.getAttribute('width') || '0');
+      const rh = parseFloat(rect.getAttribute('height') || '0');
+      clusterBoxes.push({ id, box: [rx, ry, rx + rw, ry + rh] });
+    }
   }
 
   // Extract nodes
-  for (const node of doc.querySelectorAll('g.node')) {
-    const rawId = node.getAttribute('data-mpe-key') || node.getAttribute('id') || '';
+  for (const node of doc.querySelectorAll('g.node, g.pele-node')) {
+    const rawId = node.getAttribute('data-mpe-key') || node.getAttribute('data-id') || node.getAttribute('id') || '';
     const id = flowchartSourceId(rawId, diagramId);
     if (!id || seenNodes.has(id)) continue;
     seenNodes.add(id);
-    const parentCluster = node.closest('g.cluster');
-    const parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute('id') || '', diagramId) : undefined;
+
+    // 1. Check DOM ancestry (Mermaid.js nests nodes inside cluster elements)
+    const parentCluster = node.closest('g.cluster, g.pele-cluster');
+    let parentId = parentCluster ? flowchartSourceId(parentCluster.getAttribute('id') || parentCluster.getAttribute('data-id') || '', diagramId) : undefined;
+
+    // 2. Check geometric bounding box (Pele puts nodes in separate g.pele-nodes group)
+    if (!parentId && clusterBoxes.length > 0) {
+      const t = (node.getAttribute('transform') || '').match(/translate\(\s*([-\d.eE]+)[,\s]+([-\d.eE]+)\s*\)/);
+      if (t) {
+        const nx = parseFloat(t[1]!);
+        const ny = parseFloat(t[2]!);
+        const matched = clusterBoxes.find(c => nx >= c.box[0] && nx <= c.box[2] && ny >= c.box[1] && ny <= c.box[3]);
+        if (matched) {
+          parentId = matched.id;
+        }
+      }
+    }
+
     nodes.push({ id, parentId });
   }
 
   // Extract edges
   const seenEdges = new Set<string>();
-  const linkElements = doc.querySelectorAll('path.flowchart-link, .edgePath path.path, g.edgePath');
+  const linkElements = doc.querySelectorAll('path.flowchart-link, .edgePath path.path, g.edgePath, g.pele-edge');
   for (const el of linkElements) {
     let from = el.getAttribute('data-mpe-from');
     let to = el.getAttribute('data-mpe-to');
@@ -61,7 +87,7 @@ export function extractGraphFromSvg(doc: Document | Element): { nodes: Flowchart
 
     if (!from || !to) {
       // Check ID like L_nodeA_nodeB_0 or L-nodeA-nodeB-0
-      const idStr = el.getAttribute('id') || el.parentElement?.getAttribute('id') || '';
+      const idStr = el.getAttribute('id') || el.getAttribute('data-id') || el.parentElement?.getAttribute('id') || el.parentElement?.getAttribute('data-id') || '';
       const idMatch = /^L[_-](.+?)[_-](.+?)[_-]\d+$/.exec(idStr);
       if (idMatch) {
         from = flowchartSourceId(idMatch[1]!, diagramId);
@@ -100,40 +126,52 @@ export function applyFlowchartColors(
   const borders = palette.borders;
 
   // Style cluster groups
-  for (const cluster of root.querySelectorAll('g.cluster')) {
-    const rawId = cluster.getAttribute('id') || '';
+  for (const cluster of root.querySelectorAll('g.cluster, g.pele-cluster')) {
+    const rawId = cluster.getAttribute('id') || cluster.getAttribute('data-id') || '';
     const id = flowchartSourceId(rawId, diagramId);
     const slot = groups?.get(id) ?? 0;
     const clusterFill = colorStyle === 'multi' && fills.length > 0 ? fills[slot % fills.length] : palette.clusterBkg;
     const clusterBorder = colorStyle === 'multi' && borders.length > 0 ? borders[slot % borders.length] : palette.clusterBorder;
 
-    const clusterShapes = Array.from(cluster.querySelectorAll(':scope > rect, :scope > path')) as SVGElement[];
+    const hCluster = cluster as unknown as HTMLElement;
+    if (hCluster && hCluster.style) {
+      hCluster.style.setProperty('--cluster-fill', clusterFill ?? 'transparent');
+      hCluster.style.setProperty('--cluster-border', clusterBorder ?? 'transparent');
+    }
+
+    const clusterShapes = Array.from(cluster.querySelectorAll(':scope > rect, :scope > path, rect')) as SVGElement[];
     for (const shape of clusterShapes) {
-      if (shape.style) {
-        if (!shape.style.fill && clusterFill) {
-          shape.style.fill = clusterFill;
-          shape.style.fillOpacity = dark ? '0.22' : '0.35';
+      if (clusterFill) {
+        shape.setAttribute('fill', clusterFill);
+        shape.setAttribute('fill-opacity', dark ? '0.20' : '0.30');
+        if (shape.style) {
+          shape.style.setProperty('fill', clusterFill, 'important');
+          shape.style.setProperty('fill-opacity', dark ? '0.20' : '0.30', 'important');
         }
-        if (!shape.style.stroke && clusterBorder) {
-          shape.style.stroke = clusterBorder;
-          shape.style.strokeWidth = '1.2px';
+      }
+      if (clusterBorder) {
+        shape.setAttribute('stroke', clusterBorder);
+        shape.setAttribute('stroke-width', '1.5px');
+        if (shape.style) {
+          shape.style.setProperty('stroke', clusterBorder, 'important');
+          shape.style.setProperty('stroke-width', '1.5px', 'important');
         }
-      } else {
-        if (clusterFill) {
-          shape.setAttribute('fill', clusterFill);
-          shape.setAttribute('fill-opacity', dark ? '0.22' : '0.35');
-        }
-        if (clusterBorder) {
-          shape.setAttribute('stroke', clusterBorder);
-          shape.setAttribute('stroke-width', '1.2px');
-        }
+      }
+    }
+
+    for (const label of Array.from(cluster.querySelectorAll('.pele-cluster-label, text.cluster-label, .cluster-label text, .cluster-label span, .cluster-label div'))) {
+      (label as SVGElement).setAttribute('fill', palette.text);
+      if ((label as HTMLElement).style) {
+        (label as HTMLElement).style.setProperty('fill', palette.text, 'important');
+        (label as HTMLElement).style.setProperty('color', palette.text, 'important');
+        (label as HTMLElement).style.fontWeight = 'bold';
       }
     }
   }
 
   // Style nodes
-  for (const node of Array.from(root.querySelectorAll('g.node')) as SVGElement[]) {
-    const rawId = node.getAttribute('data-mpe-key') || node.getAttribute('id') || '';
+  for (const node of Array.from(root.querySelectorAll('g.node, g.pele-node')) as SVGElement[]) {
+    const rawId = node.getAttribute('data-mpe-key') || node.getAttribute('data-id') || node.getAttribute('id') || '';
     const id = flowchartSourceId(rawId, diagramId);
     const slot = groups?.get(id) ?? 0;
 
@@ -161,33 +199,26 @@ export function applyFlowchartColors(
     ).filter(shape => !shape.closest('.label, .nodeLabel, foreignObject') && !shape.classList.contains('arrowMarkerPath'));
 
     for (const shape of shapes) {
+      const isNoneFill = shape.getAttribute('fill') === 'none' || shape.style?.fill === 'none';
+      if (!isNoneFill) {
+        shape.setAttribute('fill', fill);
+        if (shape.style) shape.style.setProperty('fill', fill);
+      }
+      shape.setAttribute('stroke', border);
+      shape.setAttribute('stroke-width', '1.25px');
       if (shape.style) {
-        if (!shape.style.fill && shape.getAttribute('fill') !== 'none') {
-          shape.style.fill = fill;
-        }
-        if (!shape.style.stroke) {
-          shape.style.stroke = border;
-          shape.style.strokeWidth = '1.25px';
-        }
-      } else {
-        if (!shape.getAttribute('fill') && shape.getAttribute('fill') !== 'none') {
-          shape.setAttribute('fill', fill);
-        }
-        if (!shape.getAttribute('stroke')) {
-          shape.setAttribute('stroke', border);
-          shape.setAttribute('stroke-width', '1.25px');
-        }
+        shape.style.setProperty('stroke', border);
+        shape.style.setProperty('stroke-width', '1.25px');
       }
     }
 
     // Apply readable text color to labels
-    for (const textEl of Array.from(node.querySelectorAll('.nodeLabel, .label text, text, .nodeLabel p, foreignObject div'))) {
+    for (const textEl of Array.from(node.querySelectorAll('.nodeLabel, .label text, text, .nodeLabel p, foreignObject div, .pele-label'))) {
       if ('style' in textEl && (textEl as HTMLElement).style) {
-        (textEl as HTMLElement).style.color = textColor;
-        (textEl as SVGElement).style.fill = textColor;
-      } else if (textEl.setAttribute) {
-        textEl.setAttribute('fill', textColor);
+        (textEl as HTMLElement).style.setProperty('color', textColor, 'important');
+        (textEl as SVGElement).style.setProperty('fill', textColor, 'important');
       }
+      textEl.setAttribute('fill', textColor);
     }
   }
 }

@@ -412,4 +412,206 @@ wip[⚡ Actively in Progress]
     }
     assert.ok(usedFills.size >= 4, `Should use multiple distinct coordinated colors (found ${usedFills.size})`);
   });
+
+  it('renders Architecture (D23), Timeline (D16), User Journey (D07), Gantt (D08), ER (D06), and Swimlanes (D02) with coordinated colors and divider lines', () => {
+    const palette = resolvePaletteData('multi', 'clear', 'slate', true);
+
+    // 1. Architecture Diagram (D23)
+    const archText = `architecture-beta
+      group cloud(cloud)[AWS Infrastructure]
+      service alb(internet)[Application Load Balancer] in cloud
+      service api(server)[API Cluster] in cloud
+      service redis(database)[Redis Cache] in cloud
+      service rds(database)[Aurora PostgreSQL] in cloud
+
+      alb:R -- L:api
+      api:B -- T:redis
+      api:R -- L:rds`;
+
+    const archSvg = renderWithPele({
+      text: archText,
+      id: 'arch-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(archSvg, 'Architecture diagram should render with Pele');
+    const archDoc = new (require('jsdom')).JSDOM(archSvg).window.document;
+    const archClusters = archDoc.querySelectorAll('g.pele-cluster rect');
+    assert.ok(archClusters.length > 0, 'Should have architecture cluster rect');
+    for (const r of archClusters) {
+      assert.ok(palette.borders.includes(r.getAttribute('stroke') || ''), 'Cluster stroke must be coordinated');
+    }
+    const archServices = archDoc.querySelectorAll('g.pele-service');
+    assert.equal(archServices.length, 4, 'Should have 4 architecture services');
+    for (const s of archServices) {
+      const sRect = s.querySelector('rect');
+      assert.ok(sRect);
+      assert.ok(palette.fills.includes(sRect.getAttribute('fill') || ''), 'Service rect fill must be from palette.fills');
+      const iconPath = s.querySelector('svg.pele-icon path');
+      assert.ok(iconPath, 'Service must have an icon');
+      assert.ok(iconPath.getAttribute('stroke'), 'Service icon must have stroke');
+    }
+
+    // 2. Timeline Diagram (D16)
+    const timelineText = `timeline
+      title Evolution of Mermaid Integration
+      2022 : Standard Mermaid Dagre
+      2024 : Mermaid Flow Enhancer
+      2026 : Mermaid Genie`;
+
+    const timelineSvg = renderWithPele({
+      text: timelineText,
+      id: 'timeline-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(timelineSvg, 'Timeline diagram should render with Pele');
+    const timeDoc = new (require('jsdom')).JSDOM(timelineSvg).window.document;
+    const periods = timeDoc.querySelectorAll('g.pele-period');
+    assert.equal(periods.length, 3, 'Should have 3 timeline periods');
+    for (const p of periods) {
+      const pRect = p.querySelector(':scope > rect');
+      assert.ok(pRect);
+      assert.ok(palette.fills.includes(pRect.getAttribute('fill') || ''), 'Period banner must have palette fill');
+      const dot = p.querySelector('circle.pele-dot');
+      assert.ok(dot, 'Period must have an axis dot');
+      assert.ok(palette.fills.includes(dot.getAttribute('fill') || ''), 'Dot must have palette fill');
+      const eventRect = p.querySelector('g.pele-event rect');
+      assert.ok(eventRect, 'Event card must have rect');
+      assert.ok(palette.fills.includes(eventRect.getAttribute('fill') || ''), 'Event card must have palette fill');
+    }
+
+    // 3. User Journey (D07)
+    const journeyText = `journey
+      title E-Commerce User Shopping Journey
+      section Discovery
+        Browse landing page: 5: Customer
+      section Purchase
+        Add to shopping cart: 4: Customer`;
+
+    const journeySvg = renderWithPele({
+      text: journeyText,
+      id: 'journey-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(journeySvg, 'Journey diagram should render with Pele');
+    const jDoc = new (require('jsdom')).JSDOM(journeySvg).window.document;
+    const sections = jDoc.querySelectorAll('g.pele-section');
+    assert.equal(sections.length, 2, 'Should have 2 journey sections');
+    for (const sec of sections) {
+      const sRect = sec.querySelector(':scope > rect');
+      assert.ok(sRect);
+      assert.ok(palette.fills.includes(sRect.getAttribute('fill') || ''), 'Journey section rect must have palette fill');
+      const tRect = sec.querySelector('g.pele-task rect');
+      assert.ok(tRect);
+      assert.ok(palette.fills.includes(tRect.getAttribute('fill') || ''), 'Task card rect must have palette fill');
+    }
+
+    // 4. Gantt Chart (D08)
+    const ganttText = `gantt
+      title Obsidian Plugin Development Sprint
+      dateFormat YYYY-MM-DD
+      section Architecture
+      Design Token System :done, des1, 2026-03-01, 2026-03-05
+      Color Contrast Engine :des2, 2026-03-06, 2026-03-10
+      section Implementation
+      Orthogonal Connector Flow :active, imp1, 2026-03-11, 2026-03-18`;
+
+    const ganttSvg = renderWithPele({
+      text: ganttText,
+      id: 'gantt-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(ganttSvg, 'Gantt chart should render with Pele');
+    const gDoc = new (require('jsdom')).JSDOM(ganttSvg).window.document;
+    for (const sec of gDoc.querySelectorAll('.pele-sections rect, rect.pele-section')) {
+      assert.equal(sec.getAttribute('fill'), 'none', 'Gantt section stripes must be transparent');
+    }
+    for (const task of gDoc.querySelectorAll('g.pele-task')) {
+      const text = task.querySelector('text');
+      if (text) {
+        assert.ok(text.getAttribute('fill') === '#ffffff' || text.getAttribute('fill') === '#0f172a', 'Task bar text must have high contrast');
+      }
+    }
+
+    // 5. ER Diagram (D06)
+    const erText = `erDiagram
+      CUSTOMER ||--o{ ORDER : places
+      CUSTOMER {
+          string customer_id PK
+          string full_name
+      }`;
+
+    const erSvg = renderWithPele({
+      text: erText,
+      id: 'er-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(erSvg, 'ER diagram should render with Pele');
+    const erDoc = new (require('jsdom')).JSDOM(erSvg).window.document;
+    const divider = erDoc.querySelector('.pele-er-divider');
+    assert.ok(divider, 'ER diagram must have a title divider line');
+    assert.equal(divider.getAttribute('fill'), 'none', 'Divider must have fill="none"');
+    assert.ok(divider.getAttribute('stroke'), 'Divider must have stroke');
+    const customerEntity = erDoc.querySelector('g.pele-entity[data-id="CUSTOMER"]');
+    assert.ok(customerEntity);
+    const entityRects = customerEntity.querySelectorAll(':scope > rect');
+    assert.equal(entityRects.length, 1, 'Duplicate overlay rect must be removed so divider line is visible');
+
+    // 6. Swimlanes Diagram (D02)
+    const swimText = `flowchart LR
+      subgraph Client["👤 Client Layer"]
+          Req["Submit Order"]
+          Wait["Wait for Confirmation"]
+      end
+      subgraph Gateway["🛡️ API Gateway"]
+          Auth["Authenticate Token"]
+          Route["Route Service"]
+      end
+      subgraph Services["⚙️ Backend Microservices"]
+          Inventory["Verify Stock"]
+      end
+      subgraph Storage["🗄️ Database"]
+          DB[(Orders DB)]
+      end
+
+      Req --> Auth
+      Auth --> Route
+      Route --> Inventory
+      Inventory --> DB
+      DB --> Wait`;
+
+    const swimSvg = renderWithPele({
+      text: swimText,
+      id: 'swim-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(swimSvg, 'Swimlanes diagram should render with Pele');
+    const swimDoc = new (require('jsdom')).JSDOM(swimSvg).window.document;
+    const clientNode = swimDoc.querySelector('g.node[data-id="Req"]');
+    const gatewayNode = swimDoc.querySelector('g.node[data-id="Auth"]');
+    const servicesNode = swimDoc.querySelector('g.node[data-id="Inventory"]');
+    const storageNode = swimDoc.querySelector('g.node[data-id="DB"]');
+    assert.ok(clientNode && gatewayNode && servicesNode && storageNode);
+
+    const clientFill = clientNode.style.getPropertyValue('--node-fill');
+    const gatewayFill = gatewayNode.style.getPropertyValue('--node-fill');
+    const servicesFill = servicesNode.style.getPropertyValue('--node-fill');
+    const storageFill = storageNode.style.getPropertyValue('--node-fill');
+
+    // Verify each swimlane gets a distinct color slot
+    assert.notEqual(clientFill, gatewayFill, 'Client and Gateway swimlanes must have different color fills');
+    assert.notEqual(gatewayFill, servicesFill, 'Gateway and Services swimlanes must have different color fills');
+    assert.notEqual(servicesFill, storageFill, 'Services and Storage swimlanes must have different color fills');
+  });
 });

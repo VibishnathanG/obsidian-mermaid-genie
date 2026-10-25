@@ -85,7 +85,15 @@
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-divider, .pele-er-divider, path.divider, line.divider, [class*="divider"], g.divider path, .classDiagram line, .requirementDiagram line) {
   fill: none !important;
   stroke: var(--pele-border, var(--mpe-border)) !important;
-  stroke-width: 1.25px !important;
+  stroke-width: 1.5px !important;
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* Hide duplicate overlay rects in Pele ER diagrams that cover the divider line */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-entity > rect:last-of-type:not(:first-of-type) {
+  display: none !important;
+  fill: none !important;
 }
 
 .theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node > :is(rect, polygon, circle, ellipse),
@@ -99,11 +107,11 @@
 }
 
 /* --- Subgraphs / Clusters --- */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster rect,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster path {
-  fill: var(--mpe-group);
-  stroke: var(--mpe-group-border);
-  stroke-width: 1.2px;
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.cluster, .pele-cluster) rect,
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.cluster, .pele-cluster) path {
+  fill: var(--cluster-fill, var(--mpe-group));
+  stroke: var(--cluster-border, var(--mpe-group-border));
+  stroke-width: 1.5px;
   rx: 8px;
   ry: 8px;
 }
@@ -218,9 +226,18 @@
 }
 
 /* Gantt task text enclosed inside task bars */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-task .pele-label, .taskText, .taskTextInside) {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-task .pele-label, .pele-task text, .taskText, .taskTextInside) {
   text-anchor: middle !important;
   font-weight: 600 !important;
+  fill: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Remove intrusive Gantt section stripe backgrounds */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-sections rect, rect.pele-section, .section0, .section1, .section2, .section3) {
+  fill: none !important;
+  stroke: none !important;
+  fill-opacity: 0 !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .node .nodeLabel p {
@@ -358,9 +375,10 @@
   font-weight: 600 !important;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.taskText0, .taskText1, .taskText2, .taskText3, .taskText:not([class*="activeText"])) {
-  fill: var(--mpe-text) !important;
-  color: var(--mpe-text) !important;
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.taskText0, .taskText1, .taskText2, .taskText3, .taskText:not([class*="activeText"]):not([class*="taskTextOutside"])) {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
 }
 
 /* Pie Charts */

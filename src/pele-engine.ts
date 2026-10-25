@@ -98,6 +98,12 @@ export function enhancePeleSvg(
     root.style.setProperty('--pele-radius', `${settings.nodeRadius}px`);
     root.style.setProperty('--pele-font', '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif');
 
+    // Series variables for timeline, journey, actor dots, and multi-series charts
+    for (let s = 0; s < 12; s++) {
+      const sFill = palette.fills[s % palette.fills.length] ?? palette.accent;
+      root.style.setProperty(`--pele-series-${s + 1}`, sFill);
+    }
+
     // Also set Genie variables for path tracing and hover effects
     root.style.setProperty('--mpe-duration', `${settings.animationDuration ?? 180}ms`);
     root.style.setProperty('--mpe-highlight', palette.accent);
@@ -178,6 +184,9 @@ export function enhancePeleSvg(
   const isPelePacket = root.classList.contains('pele-packet') || root.getAttribute('aria-roledescription') === 'packet';
   const isPeleBlock = root.classList.contains('pele-block') || root.getAttribute('aria-roledescription') === 'block';
   const isPeleC4 = root.classList.contains('pele-c4') || root.getAttribute('aria-roledescription') === 'c4';
+  const isPeleArch = root.classList.contains('pele-architecture') || root.getAttribute('aria-roledescription') === 'architecture';
+  const isPeleTimeline = root.classList.contains('pele-timeline') || root.getAttribute('aria-roledescription') === 'timeline';
+  const isPeleJourney = root.classList.contains('pele-journey') || root.getAttribute('aria-roledescription') === 'journey';
 
   // 1. Flowcharts: Coordinated branch palette
   if (isPeleFlowchart) {
@@ -250,6 +259,12 @@ export function enhancePeleSvg(
 
       setNodeVars(node, fill, stroke, textColor);
 
+      // Remove duplicate overlay rects inserted by Pele that cover the divider line
+      const allRects = Array.from(node.querySelectorAll(':scope > rect'));
+      for (let r = 1; r < allRects.length; r++) {
+        allRects[r]!.remove();
+      }
+
       const rect = node.querySelector(':scope > rect') as SVGRectElement | null;
       if (rect) {
         rect.setAttribute('fill', fill);
@@ -266,9 +281,12 @@ export function enhancePeleSvg(
       for (const divider of Array.from(node.querySelectorAll('.pele-er-divider, path.pele-er-divider'))) {
         divider.setAttribute('fill', 'none');
         divider.setAttribute('stroke', stroke);
-        divider.setAttribute('stroke-width', '1.25px');
+        divider.setAttribute('stroke-width', '1.5px');
         setElStyle(divider, 'fill', 'none', true);
         setElStyle(divider, 'stroke', stroke, true);
+        setElStyle(divider, 'stroke-width', '1.5px', true);
+        setElStyle(divider, 'display', 'block', true);
+        node.appendChild(divider);
       }
 
       const stripes = Array.from(node.querySelectorAll('g.pele-er-stripes rect'));
@@ -301,8 +319,21 @@ export function enhancePeleSvg(
     }
   }
 
-  // 4. Gantt Charts: Coordinated task bars with guaranteed WCAG text contrast
+  // 4. Gantt Charts: Dark muted color bars with white font and clear backgrounds
   if (isPeleGantt) {
+    // Clear intrusive section stripe backgrounds
+    for (const sec of Array.from(doc.querySelectorAll('.pele-sections rect, rect.pele-section'))) {
+      sec.setAttribute('fill', 'none');
+      sec.setAttribute('stroke', 'none');
+      setElStyle(sec, 'fill', 'none', true);
+      setElStyle(sec, 'stroke', 'none', true);
+    }
+
+    const darkMutedFills = dark
+      ? palette.fills
+      : ['#25446b', '#1e4d41', '#544122', '#453361', '#214957', '#563347'];
+    const darkMutedBorders = palette.borders;
+
     let taskBarIdx = 0;
     for (const taskGroup of Array.from(doc.querySelectorAll('g.pele-task'))) {
       const isMilestone = taskGroup.classList.contains('pele-milestone') || !!taskGroup.querySelector('path');
@@ -339,12 +370,11 @@ export function enhancePeleSvg(
         rect.setAttribute('width', String(rw));
       }
 
-      const slot = taskBarIdx % (palette.fills.length || 1);
+      const slot = taskBarIdx % (darkMutedFills.length || 1);
       taskBarIdx++;
 
-      const barFill = isActive ? palette.accent : (palette.fills[slot] ?? palette.surface);
-      const barStroke = isActive ? palette.accent : (palette.borders[slot] ?? palette.border);
-      const textColor = textOnFill(barFill, palette.text);
+      const barFill = isActive ? palette.accent : (darkMutedFills[slot] ?? palette.surface);
+      const barStroke = isActive ? palette.accent : (darkMutedBorders[slot % darkMutedBorders.length] ?? palette.border);
 
       rect.setAttribute('fill', barFill);
       rect.setAttribute('stroke', barStroke);
@@ -356,12 +386,15 @@ export function enhancePeleSvg(
         rect.style.stroke = barStroke;
       }
 
-      // Enclose text inside task box with guaranteed readable contrast
+      // Enclose text inside task box with guaranteed readable contrast: font as white (#ffffff)
       const cx = rx + rw / 2;
       const cy = ry + rh / 2 + 4.5;
       text.setAttribute('x', String(cx));
       text.setAttribute('y', String(cy));
       text.setAttribute('text-anchor', 'middle');
+
+      const activeTextColor = dark ? '#0f172a' : '#ffffff';
+      const textColor = isActive ? activeTextColor : '#ffffff';
 
       text.setAttribute('fill', textColor);
       text.setAttribute('font-weight', '600');
@@ -372,6 +405,9 @@ export function enhancePeleSvg(
 
     for (const title of Array.from(doc.querySelectorAll('.pele-title, .pele-section-label, .pele-axis text'))) {
       title.setAttribute('fill', palette.text);
+      if (title.classList.contains('pele-section-label')) {
+        setElStyle(title, 'font-weight', '600');
+      }
     }
   }
 
@@ -678,6 +714,289 @@ export function enhancePeleSvg(
         } else {
           text.setAttribute('fill', textColor);
         }
+      }
+    }
+  }
+
+  // 13. Architecture Diagrams: Coordinated cloud clusters, service fills, and icon strokes
+  if (isPeleArch) {
+    const clusters = Array.from(doc.querySelectorAll('g.pele-cluster'));
+    for (let c = 0; c < clusters.length; c++) {
+      const cluster = clusters[c]!;
+      const slot = c % (palette.fills.length || 1);
+      const clusterFill = palette.clusterBkg ?? (dark ? '#1a2333' : '#f8fafc');
+      const clusterBorder = palette.borders[slot] ?? palette.border;
+
+      const rect = cluster.querySelector(':scope > rect, rect') as SVGRectElement | null;
+      if (rect) {
+        rect.setAttribute('fill', clusterFill);
+        rect.setAttribute('fill-opacity', dark ? '0.45' : '0.65');
+        rect.setAttribute('stroke', clusterBorder);
+        rect.setAttribute('stroke-width', '1.5px');
+        rect.setAttribute('rx', '8');
+        rect.setAttribute('ry', '8');
+        if (rect.style) {
+          rect.style.fill = clusterFill;
+          rect.style.stroke = clusterBorder;
+        }
+      }
+
+      const label = cluster.querySelector('.pele-cluster-label');
+      if (label) {
+        label.setAttribute('fill', palette.text);
+        setElStyle(label, 'fill', palette.text, true);
+        setElStyle(label, 'font-weight', 'bold');
+      }
+
+      const icon = cluster.querySelector('svg.pele-icon path');
+      if (icon) {
+        icon.setAttribute('stroke', clusterBorder);
+        setElStyle(icon, 'stroke', clusterBorder, true);
+      }
+    }
+
+    const services = Array.from(doc.querySelectorAll('g.pele-service, g.pele-nodes > g.pele-node'));
+    for (let s = 0; s < services.length; s++) {
+      const service = services[s]!;
+      const slot = s % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const iconColor = textOnFill(fill, palette.text);
+
+      setNodeVars(service, fill, stroke, palette.text);
+
+      const rect = service.querySelector(':scope > rect, rect') as SVGRectElement | null;
+      if (rect) {
+        rect.setAttribute('fill', fill);
+        rect.setAttribute('stroke', stroke);
+        rect.setAttribute('stroke-width', '1.5px');
+        rect.setAttribute('rx', '6');
+        rect.setAttribute('ry', '6');
+        if (rect.style) {
+          rect.style.fill = fill;
+          rect.style.stroke = stroke;
+        }
+      }
+
+      for (const iconPath of Array.from(service.querySelectorAll('svg.pele-icon path'))) {
+        iconPath.setAttribute('stroke', iconColor);
+        setElStyle(iconPath, 'stroke', iconColor, true);
+      }
+
+      const label = service.querySelector('text.pele-label, text');
+      if (label) {
+        label.setAttribute('fill', palette.text);
+        setElStyle(label, 'fill', palette.text, true);
+        setElStyle(label, 'font-weight', '500');
+      }
+    }
+
+    for (const edge of Array.from(doc.querySelectorAll('g.pele-edge path'))) {
+      edge.setAttribute('stroke', palette.line);
+      edge.setAttribute('stroke-width', '1.5px');
+    }
+  }
+
+  // 14. Timeline Diagrams: Coordinated period banners, axis dots, stems, and event cards
+  if (isPeleTimeline) {
+    const title = doc.querySelector('.pele-title, text.pele-title tspan');
+    if (title) {
+      title.setAttribute('fill', palette.text);
+      setElStyle(title, 'fill', palette.text, true);
+    }
+
+    const axis = doc.querySelector('path.pele-axis');
+    if (axis) {
+      axis.setAttribute('stroke', palette.line);
+      setElStyle(axis, 'stroke', palette.line, true);
+    }
+    const marker = doc.querySelector('path.pele-marker');
+    if (marker) {
+      marker.setAttribute('fill', palette.line);
+      setElStyle(marker, 'fill', palette.line, true);
+    }
+
+    const periods = Array.from(doc.querySelectorAll('g.pele-period'));
+    for (let p = 0; p < periods.length; p++) {
+      const period = periods[p]!;
+      const slot = p % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const periodTextColor = textOnFill(fill, palette.text);
+
+      const pRect = period.querySelector(':scope > rect') as SVGRectElement | null;
+      if (pRect) {
+        pRect.setAttribute('fill', fill);
+        pRect.setAttribute('stroke', stroke);
+        pRect.setAttribute('stroke-width', '1.25px');
+        pRect.setAttribute('rx', '4');
+        pRect.setAttribute('ry', '4');
+        if (pRect.style) {
+          pRect.style.fill = fill;
+          pRect.style.stroke = stroke;
+        }
+      }
+
+      const pText = period.querySelector(':scope > text');
+      if (pText) {
+        pText.setAttribute('fill', periodTextColor);
+        setElStyle(pText, 'fill', periodTextColor, true);
+        setElStyle(pText, 'font-weight', 'bold');
+      }
+
+      const stem = period.querySelector(':scope > path.pele-edge');
+      if (stem) {
+        stem.setAttribute('stroke', stroke);
+        stem.setAttribute('stroke-width', '1.5px');
+        setElStyle(stem, 'stroke', stroke, true);
+      }
+
+      const dot = period.querySelector(':scope > circle.pele-dot');
+      if (dot) {
+        dot.setAttribute('fill', fill);
+        dot.setAttribute('stroke', dark ? palette.background : '#ffffff');
+        dot.setAttribute('stroke-width', '2px');
+        setElStyle(dot, 'fill', fill, true);
+        setElStyle(dot, 'stroke', dark ? palette.background : '#ffffff', true);
+      }
+
+      const events = Array.from(period.querySelectorAll('g.pele-event'));
+      for (let e = 0; e < events.length; e++) {
+        const evt = events[e]!;
+        const eRect = evt.querySelector('rect') as SVGRectElement | null;
+        if (eRect) {
+          eRect.setAttribute('fill', fill);
+          eRect.setAttribute('fill-opacity', dark ? '0.28' : '0.18');
+          eRect.setAttribute('stroke', stroke);
+          eRect.setAttribute('stroke-width', '1.25px');
+          eRect.setAttribute('rx', '4');
+          eRect.setAttribute('ry', '4');
+          if (eRect.style) {
+            eRect.style.fill = fill;
+            eRect.style.stroke = stroke;
+          }
+        }
+
+        const eText = evt.querySelector('text');
+        if (eText) {
+          eText.setAttribute('fill', palette.text);
+          setElStyle(eText, 'fill', palette.text, true);
+        }
+      }
+    }
+  }
+
+  // 15. User Journey Diagrams: Coordinated section headers, task cards, and actor dots
+  if (isPeleJourney) {
+    const title = doc.querySelector('.pele-title, text.pele-title tspan');
+    if (title) {
+      title.setAttribute('fill', palette.text);
+      setElStyle(title, 'fill', palette.text, true);
+    }
+
+    for (const grid of Array.from(doc.querySelectorAll('path.pele-grid'))) {
+      grid.setAttribute('stroke', palette.border);
+      grid.setAttribute('stroke-opacity', '0.35');
+    }
+    for (const scale of Array.from(doc.querySelectorAll('.pele-scale text'))) {
+      scale.setAttribute('fill', palette.text);
+    }
+    for (const stem of Array.from(doc.querySelectorAll('path.pele-stems'))) {
+      stem.setAttribute('stroke', palette.line);
+      stem.setAttribute('stroke-opacity', '0.5');
+    }
+    for (const edge of Array.from(doc.querySelectorAll('path.pele-edge'))) {
+      edge.setAttribute('stroke', palette.accent);
+      edge.setAttribute('stroke-width', '2px');
+    }
+
+    const sections = Array.from(doc.querySelectorAll('g.pele-section'));
+    for (let s = 0; s < sections.length; s++) {
+      const sec = sections[s]!;
+      const slot = s % (palette.fills.length || 1);
+      const fill = palette.fills[slot] ?? palette.surface;
+      const stroke = palette.borders[slot] ?? palette.border;
+      const textColor = textOnFill(fill, palette.text);
+
+      const secRect = sec.querySelector(':scope > rect') as SVGRectElement | null;
+      if (secRect) {
+        secRect.setAttribute('fill', fill);
+        secRect.setAttribute('stroke', stroke);
+        secRect.setAttribute('stroke-width', '1.25px');
+        secRect.setAttribute('rx', '6');
+        secRect.setAttribute('ry', '6');
+        if (secRect.style) {
+          secRect.style.fill = fill;
+          secRect.style.stroke = stroke;
+        }
+      }
+
+      const secText = sec.querySelector(':scope > text');
+      if (secText) {
+        secText.setAttribute('fill', textColor);
+        setElStyle(secText, 'fill', textColor, true);
+        setElStyle(secText, 'font-weight', 'bold');
+        const tspan = secText.querySelector('tspan');
+        if (tspan) {
+          tspan.setAttribute('fill', textColor);
+          setElStyle(tspan, 'fill', textColor, true);
+        }
+      }
+
+      const tasks = Array.from(sec.querySelectorAll('g.pele-task'));
+      for (let t = 0; t < tasks.length; t++) {
+        const task = tasks[t]!;
+        const tRect = task.querySelector('rect') as SVGRectElement | null;
+        if (tRect) {
+          tRect.setAttribute('fill', fill);
+          tRect.setAttribute('fill-opacity', dark ? '0.28' : '0.18');
+          tRect.setAttribute('stroke', stroke);
+          tRect.setAttribute('stroke-width', '1.25px');
+          tRect.setAttribute('rx', '4');
+          tRect.setAttribute('ry', '4');
+          if (tRect.style) {
+            tRect.style.fill = fill;
+            tRect.style.stroke = stroke;
+          }
+        }
+
+        const tText = task.querySelector('text');
+        if (tText) {
+          tText.setAttribute('fill', palette.text);
+          setElStyle(tText, 'fill', palette.text, true);
+        }
+      }
+    }
+
+    const actorMap = new Map<string, number>();
+    let actorCount = 0;
+    for (const actor of Array.from(doc.querySelectorAll('circle.pele-actor'))) {
+      const actorName = actor.querySelector('title')?.textContent || actor.getAttribute('data-id') || '';
+      if (actorName && !actorMap.has(actorName)) {
+        actorMap.set(actorName, actorCount++);
+      }
+      const aSlot = (actorMap.get(actorName) ?? 0) % (palette.fills.length || 1);
+      const aCol = palette.fills[aSlot] ?? palette.accent;
+      const aBorder = palette.borders[aSlot % palette.borders.length] ?? palette.border;
+      actor.setAttribute('fill', aCol);
+      actor.setAttribute('stroke', aBorder);
+      setElStyle(actor, 'fill', aCol, true);
+      setElStyle(actor, 'stroke', aBorder, true);
+    }
+
+    for (const legItem of Array.from(doc.querySelectorAll('g.pele-legend-item'))) {
+      const id = legItem.getAttribute('data-id') || '';
+      const aSlot = (actorMap.get(id) ?? 0) % (palette.fills.length || 1);
+      const aCol = palette.fills[aSlot] ?? palette.accent;
+      const dot = legItem.querySelector('circle');
+      if (dot) {
+        dot.setAttribute('fill', aCol);
+        setElStyle(dot, 'fill', aCol, true);
+      }
+      const txt = legItem.querySelector('text');
+      if (txt) {
+        txt.setAttribute('fill', palette.text);
+        setElStyle(txt, 'fill', palette.text, true);
       }
     }
   }

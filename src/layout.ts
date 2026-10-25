@@ -898,6 +898,10 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
 
   // Task bars: colorize with coordinated palette fills and borders
   const isMulti = palette.fills.length > 0;
+  const darkMutedFills = dark
+    ? palette.fills
+    : ['#25446b', '#1e4d41', '#544122', '#453361', '#214957', '#563347'];
+  const darkMutedBorders = palette.borders;
   let taskBarIdx = 0;
   for (const rect of doc.querySelectorAll('rect.task, rect[class*="task"]')) {
     const cls = rect.getAttribute('class') || '';
@@ -914,9 +918,9 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
       rect.setAttribute('rx', '4');
       rect.setAttribute('ry', '4');
     } else if (!cls.includes('milestone')) {
-      const slot = taskBarIdx % (palette.fills.length || 1);
-      const fill = isMulti ? palette.fills[slot]! : palette.surface;
-      const stroke = isMulti ? palette.borders[slot]! : palette.border;
+      const slot = taskBarIdx % (darkMutedFills.length || 1);
+      const fill = isMulti ? darkMutedFills[slot]! : palette.surface;
+      const stroke = isMulti ? darkMutedBorders[slot % darkMutedBorders.length]! : palette.border;
       taskBarIdx++;
       rect.setAttribute('fill', fill);
       rect.setAttribute('stroke', stroke);
@@ -987,13 +991,14 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
       text.classList.remove('taskTextOutsideRight', 'taskTextOutsideLeft', 'taskTextOutside');
       text.classList.add('taskText');
 
-      const rectFill = matchedRect.getAttribute('fill') || palette.surface;
-      const fillCol = textOnFill(rectFill, palette.text);
+      const isActive = matchedRect.classList.contains('active') || text.classList.contains('active') || /activeText/i.test(text.getAttribute('class') || '');
+      const fillCol = isActive ? activeTextColor : '#ffffff';
       text.setAttribute('fill', fillCol);
       if ((text as HTMLElement).style) {
         (text as HTMLElement).style.setProperty('fill', fillCol, 'important');
         (text as HTMLElement).style.setProperty('color', fillCol, 'important');
         (text as HTMLElement).style.setProperty('text-anchor', 'middle', 'important');
+        (text as HTMLElement).style.fontWeight = '600';
       }
     } else {
       text.setAttribute('fill', palette.text);
@@ -1010,10 +1015,11 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
     line.setAttribute('stroke-opacity', '0.45');
   }
 
-  // Alternating section background bands
-  for (const sec of doc.querySelectorAll('.section0, .section1, .section2, .section3')) {
-    sec.setAttribute('fill', palette.clusterBkg ?? (dark ? '#182230' : '#f8fafc'));
-    sec.setAttribute('fill-opacity', '0.35');
+  // Clear alternating section background bands
+  for (const sec of doc.querySelectorAll('.section0, .section1, .section2, .section3, rect.section')) {
+    sec.setAttribute('fill', 'none');
+    sec.setAttribute('stroke', 'none');
+    sec.setAttribute('fill-opacity', '0');
   }
 }
 
@@ -1174,9 +1180,16 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
   }
 
   // Dividers
-  for (const divider of doc.querySelectorAll('g.divider path, line.divider')) {
+  for (const divider of doc.querySelectorAll('g.divider path, line.divider, path.pele-er-divider, [class*="divider"]')) {
     divider.setAttribute('stroke', palette.border);
-    divider.setAttribute('stroke-width', '1px');
+    divider.setAttribute('stroke-width', '1.5px');
+    divider.setAttribute('fill', 'none');
+    if ((divider as HTMLElement).style) {
+      (divider as HTMLElement).style.setProperty('stroke', palette.border, 'important');
+      (divider as HTMLElement).style.setProperty('stroke-width', '1.5px', 'important');
+      (divider as HTMLElement).style.setProperty('fill', 'none', 'important');
+      (divider as HTMLElement).style.setProperty('display', 'block', 'important');
+    }
   }
 
   // Entity title
