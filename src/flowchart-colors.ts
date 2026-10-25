@@ -173,7 +173,10 @@ export function applyFlowchartColors(
   for (const node of Array.from(root.querySelectorAll('g.node, g.pele-node')) as SVGElement[]) {
     const rawId = node.getAttribute('data-mpe-key') || node.getAttribute('data-id') || node.getAttribute('id') || '';
     const id = flowchartSourceId(rawId, diagramId);
-    const slot = groups?.get(id) ?? 0;
+    // Explicit stage/step class (e.g. from AgentFlow or pipelines: step0, step1, stage0, c0...)
+    const stepClassMatch = node.getAttribute('class')?.match(/\b(?:step|stage|c)(\d+)\b/);
+    const explicitSlot = stepClassMatch ? parseInt(stepClassMatch[1]!, 10) : undefined;
+    const slot = explicitSlot ?? groups?.get(id) ?? 0;
 
     const fill = colorStyle === 'multi' && fills.length > 0
       ? fills[slot % fills.length]!

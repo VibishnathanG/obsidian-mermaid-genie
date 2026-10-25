@@ -90,9 +90,18 @@
   opacity: 1 !important;
 }
 
-/* Hide duplicate overlay rects in Pele ER diagrams that cover the divider line */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-entity > rect:last-of-type:not(:first-of-type) {
+/* Hide duplicate overlay rects and inner patch rect stripes in Pele ER diagrams */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-entity > rect:last-of-type:not(:first-of-type),
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-er-stripes {
   display: none !important;
+  fill: none !important;
+  stroke: none !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .pele-er-stripes rect {
+  display: none !important;
+  stroke: none !important;
+  stroke-width: 0 !important;
   fill: none !important;
 }
 
@@ -116,19 +125,25 @@
   ry: 8px;
 }
 
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label text,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label span,
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label .nodeLabel {
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.cluster-label text, .cluster-label span, .cluster-label .nodeLabel, text.pele-cluster-label) {
   font-weight: 600 !important;
   font-size: 13px !important;
   white-space: nowrap !important;
   fill: var(--mpe-text) !important;
   color: var(--mpe-text) !important;
+  text-anchor: middle !important;
+  text-align: center !important;
 }
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .cluster-label foreignObject > div {
   white-space: nowrap !important;
   overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
 }
 
 /* --- Crisp, Clear Typography without any Text Truncation --- */
@@ -196,7 +211,6 @@
   .pele-field tspan,
   .pele-value,
   .pele-value tspan,
-  .pele-cluster-label,
   .classDiagram .members-group text,
   .classDiagram .methods-group text,
   .attribute-type,
@@ -362,10 +376,10 @@
   color: var(--mpe-text) !important;
 }
 
-/* Active task bar text contrast: on light accent fill in dark mode, active text must be dark #0f172a */
+/* Active task bar text contrast: high contrast white text matching all task bars */
 .theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.activeText0, .activeText1, .activeText2, .activeText3, [class*="activeText"], .taskText.active, .task.active + text) {
-  fill: #0f172a !important;
-  color: #0f172a !important;
+  fill: #ffffff !important;
+  color: #ffffff !important;
   font-weight: 600 !important;
 }
 
@@ -388,13 +402,51 @@
   font-weight: 600 !important;
 }
 
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.slice, text.slice, .pieCircleText, [class*="slice"]) {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) .legend text {
   fill: var(--mpe-text) !important;
 }
 
-/* Git Graphs */
-.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.commit-label, .branchLabel, .tag-label) {
-  fill: var(--mpe-text) !important;
+/* Git Graphs: Redesigned high-visibility branches, badges, and white text */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) line[class*="branch"],
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) path[class*="branch"] {
+  stroke-width: 2.5px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel) {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) rect.commit-label-bkg {
+  fill: #1e293b !important;
+  stroke: #475569 !important;
+  stroke-width: 1px !important;
+  rx: 4px !important;
+  ry: 4px !important;
+  opacity: 0.94 !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) text.commit-label {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) circle[class*="commit"] {
+  stroke: #ffffff !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.tag-label, [class*="tag-label"]) {
+  font-weight: 600 !important;
 }
 
 /* XY Charts & Quadrants */

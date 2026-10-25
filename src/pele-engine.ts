@@ -289,11 +289,9 @@ export function enhancePeleSvg(
         node.appendChild(divider);
       }
 
-      const stripes = Array.from(node.querySelectorAll('g.pele-er-stripes rect'));
-      for (let s = 0; s < stripes.length; s++) {
-        const stripe = stripes[s]!;
-        stripe.setAttribute('fill', fill);
-        stripe.setAttribute('fill-opacity', s % 2 === 0 ? '1' : '0.82');
+      // Remove inner patch rect stripes that create conflicting horizontal borders across attributes
+      for (const stripes of Array.from(node.querySelectorAll('g.pele-er-stripes'))) {
+        stripes.remove();
       }
 
       const title = node.querySelector(':scope > text.pele-label');
@@ -393,8 +391,7 @@ export function enhancePeleSvg(
       text.setAttribute('y', String(cy));
       text.setAttribute('text-anchor', 'middle');
 
-      const activeTextColor = dark ? '#0f172a' : '#ffffff';
-      const textColor = isActive ? activeTextColor : '#ffffff';
+      const textColor = '#ffffff';
 
       text.setAttribute('fill', textColor);
       text.setAttribute('font-weight', '600');

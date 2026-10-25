@@ -1378,7 +1378,9 @@ function applyFlowchartColors(root, palette, dark, colorStyle) {
   for (const node of Array.from(root.querySelectorAll("g.node, g.pele-node"))) {
     const rawId = node.getAttribute("data-mpe-key") || node.getAttribute("data-id") || node.getAttribute("id") || "";
     const id2 = flowchartSourceId(rawId, diagramId);
-    const slot = groups?.get(id2) ?? 0;
+    const stepClassMatch = node.getAttribute("class")?.match(/\b(?:step|stage|c)(\d+)\b/);
+    const explicitSlot = stepClassMatch ? parseInt(stepClassMatch[1], 10) : void 0;
+    const slot = explicitSlot ?? groups?.get(id2) ?? 0;
     const fill = colorStyle === "multi" && fills.length > 0 ? fills[slot % fills.length] : palette.surface;
     const border = colorStyle === "multi" && borders.length > 0 ? borders[slot % borders.length] : palette.border;
     const textColor = textOnFill(fill, palette.text, 4.5);
@@ -2099,7 +2101,7 @@ function fixGanttChart(doc, palette, dark) {
   const root = doc.documentElement;
   const isGantt = root.classList.contains("gantt") || !!doc.querySelector(".grid .tick, .taskText, .sectionTitle, rect.task");
   if (!isGantt) return;
-  const activeTextColor = dark ? "#0f172a" : "#ffffff";
+  const activeTextColor = "#ffffff";
   for (const text of doc.querySelectorAll('[class*="activeText"], .taskText.active, .task.active + text')) {
     text.setAttribute("fill", activeTextColor);
     if (text.style) {
@@ -2353,7 +2355,7 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
     if (stroke && stroke !== "none") path.setAttribute("stroke", palette.border);
     else path.setAttribute("fill", palette.clusterBkg ?? (dark ? "#1d2838" : "#f1f5f9"));
   }
-  for (const divider of doc.querySelectorAll('g.divider path, line.divider, path.pele-er-divider, [class*="divider"]')) {
+  for (const divider of doc.querySelectorAll("g.divider path, line.divider, path.pele-er-divider, path.divider")) {
     divider.setAttribute("stroke", palette.border);
     divider.setAttribute("stroke-width", "1.5px");
     divider.setAttribute("fill", "none");
@@ -2363,6 +2365,9 @@ function fixEntityRelationshipDiagram(doc, palette, dark) {
       divider.style.setProperty("fill", "none", "important");
       divider.style.setProperty("display", "block", "important");
     }
+  }
+  for (const stripes of doc.querySelectorAll("g.pele-er-stripes")) {
+    stripes.remove();
   }
   for (const title of doc.querySelectorAll("g.label.name, text.entityLabel, .name .nodeLabel, .name p")) {
     title.setAttribute("fill", palette.text);
@@ -2578,6 +2583,118 @@ function fixPacketDiagram(doc, palette, _dark) {
           textEl.style.setProperty("color", textColor, "important");
         }
       }
+    }
+  }
+}
+function fixPieChart(doc, palette, dark) {
+  const root = doc.documentElement;
+  const isPie = root.classList.contains("pie") || !!doc.querySelector(".pieCircle, .pieTitleText, .slice");
+  if (!isPie) return;
+  for (const t of doc.querySelectorAll(".pieTitleText, text.pieTitleText")) {
+    t.setAttribute("fill", palette.text);
+    if (t.style) t.style.setProperty("fill", palette.text, "important");
+  }
+  for (const s of doc.querySelectorAll('.slice, text.slice, .pieCircleText, [class*="slice"]')) {
+    s.setAttribute("fill", "#ffffff");
+    s.setAttribute("style", "fill: #ffffff !important; color: #ffffff !important; font-weight: 600 !important;");
+    if (s.style) {
+      s.style.setProperty("fill", "#ffffff", "important");
+      s.style.setProperty("color", "#ffffff", "important");
+      s.style.setProperty("font-weight", "600", "important");
+    }
+  }
+  for (const l of doc.querySelectorAll(".legend text, g.legend text")) {
+    l.setAttribute("fill", palette.text);
+    if (l.style) l.style.setProperty("fill", palette.text, "important");
+  }
+}
+function fixGitGraph(doc, palette, dark) {
+  const root = doc.documentElement;
+  const isGit = root.classList.contains("gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, [class*="branch0"]');
+  if (!isGit) return;
+  const fills = palette.fills.length > 0 ? palette.fills : ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"];
+  const borders = palette.borders.length > 0 ? palette.borders : fills;
+  for (let b = 0; b < 10; b++) {
+    const branchColor = fills[b % fills.length];
+    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}`)) {
+      line.setAttribute("stroke", branchColor);
+      line.setAttribute("stroke-width", "2.5px");
+      line.setAttribute("stroke-dasharray", "none");
+      if (line.style) {
+        line.style.setProperty("stroke", branchColor, "important");
+        line.style.setProperty("stroke-width", "2.5px", "important");
+      }
+    }
+    for (const arrow of doc.querySelectorAll(`.arrow${b}, path.arrow${b}`)) {
+      arrow.setAttribute("stroke", branchColor);
+      arrow.setAttribute("fill", "none");
+      if (arrow.style) {
+        arrow.style.setProperty("stroke", branchColor, "important");
+      }
+    }
+    for (const bkg of doc.querySelectorAll(`rect.branchLabelBkg.label${b}, rect.label${b}`)) {
+      bkg.setAttribute("fill", branchColor);
+      bkg.setAttribute("stroke", borders[b % borders.length]);
+      bkg.setAttribute("rx", "5");
+      bkg.setAttribute("ry", "5");
+      if (bkg.style) {
+        bkg.style.setProperty("fill", branchColor, "important");
+        bkg.style.setProperty("stroke", borders[b % borders.length], "important");
+      }
+    }
+    for (const btext of doc.querySelectorAll(`.branch-label${b} text, .branch-label${b}`)) {
+      btext.setAttribute("fill", "#ffffff");
+      if (btext.style) {
+        btext.style.setProperty("fill", "#ffffff", "important");
+        btext.style.setProperty("color", "#ffffff", "important");
+        btext.style.setProperty("font-weight", "700", "important");
+      }
+    }
+    for (const circle of doc.querySelectorAll(`circle.commit.commit${b}, circle.commit${b}`)) {
+      circle.setAttribute("fill", branchColor);
+      circle.setAttribute("stroke", "#ffffff");
+      circle.setAttribute("stroke-width", "2px");
+      circle.setAttribute("r", "5.5");
+      if (circle.style) {
+        circle.style.setProperty("fill", branchColor, "important");
+        circle.style.setProperty("stroke", "#ffffff", "important");
+        circle.style.setProperty("stroke-width", "2px", "important");
+      }
+    }
+  }
+  for (const bkg of doc.querySelectorAll("rect.commit-label-bkg")) {
+    const bkgFill = dark ? "#1e293b" : "#0f172a";
+    bkg.setAttribute("fill", bkgFill);
+    bkg.setAttribute("stroke", "#475569");
+    bkg.setAttribute("stroke-width", "1px");
+    bkg.setAttribute("rx", "4");
+    bkg.setAttribute("ry", "4");
+    bkg.setAttribute("opacity", "0.94");
+    if (bkg.style) {
+      bkg.style.setProperty("fill", bkgFill, "important");
+      bkg.style.setProperty("stroke", "#475569", "important");
+      bkg.style.setProperty("opacity", "0.94", "important");
+    }
+  }
+  for (const text of doc.querySelectorAll("text.commit-label, .commit-label text")) {
+    text.setAttribute("fill", "#ffffff");
+    if (text.style) {
+      text.style.setProperty("fill", "#ffffff", "important");
+      text.style.setProperty("color", "#ffffff", "important");
+      text.style.setProperty("font-weight", "600", "important");
+      text.style.setProperty("font-size", "12px", "important");
+    }
+  }
+  for (const tagBkg of doc.querySelectorAll("polygon.tag-label-bkg, rect.tag-label-bkg, path.tag-label-bkg")) {
+    tagBkg.setAttribute("fill", palette.accent);
+    tagBkg.setAttribute("stroke", palette.accent);
+  }
+  for (const tagText of doc.querySelectorAll("text.tag-label, .tag-label text")) {
+    const tagTextColor = dark ? "#0f172a" : "#ffffff";
+    tagText.setAttribute("fill", tagTextColor);
+    if (tagText.style) {
+      tagText.style.setProperty("fill", tagTextColor, "important");
+      tagText.style.setProperty("font-weight", "700", "important");
     }
   }
 }
@@ -3043,6 +3160,15 @@ function styleSvg(svg, direction, settings, palette, dark) {
   fixKanbanDiagram(doc, palette, dark);
   fixTreemapDiagram(doc, palette, dark);
   fixPacketDiagram(doc, palette, dark);
+  fixPieChart(doc, palette, dark);
+  fixGitGraph(doc, palette, dark);
+  for (const cl2 of doc.querySelectorAll(".cluster-label text, text.pele-cluster-label, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel")) {
+    cl2.setAttribute("text-anchor", "middle");
+    if (cl2.style) {
+      cl2.style.setProperty("text-anchor", "middle", "important");
+      cl2.style.setProperty("text-align", "center", "important");
+    }
+  }
   root.classList?.add?.("mfe-enhanced", "mermaid-genie-diagram");
   if (root.style?.setProperty) {
     root.style.setProperty("--mpe-duration", `${settings.animationDuration ?? 450}ms`);
@@ -24468,11 +24594,8 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
         setElStyle(divider, "display", "block", true);
         node.appendChild(divider);
       }
-      const stripes = Array.from(node.querySelectorAll("g.pele-er-stripes rect"));
-      for (let s = 0; s < stripes.length; s++) {
-        const stripe = stripes[s];
-        stripe.setAttribute("fill", fill);
-        stripe.setAttribute("fill-opacity", s % 2 === 0 ? "1" : "0.82");
+      for (const stripes of Array.from(node.querySelectorAll("g.pele-er-stripes"))) {
+        stripes.remove();
       }
       const title = node.querySelector(":scope > text.pele-label");
       if (title) {
@@ -24551,8 +24674,7 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       text.setAttribute("x", String(cx2));
       text.setAttribute("y", String(cy2));
       text.setAttribute("text-anchor", "middle");
-      const activeTextColor = dark ? "#0f172a" : "#ffffff";
-      const textColor = isActive ? activeTextColor : "#ffffff";
+      const textColor = "#ffffff";
       text.setAttribute("fill", textColor);
       text.setAttribute("font-weight", "600");
       setElStyle(text, "fill", textColor, true);
@@ -25408,6 +25530,7 @@ function transpileAgentFlow(source) {
   const dirMatch = source.match(/^agentflow-beta\s+([A-Za-z]+)/i);
   const direction = dirMatch ? dirMatch[1].toUpperCase() : "TB";
   const output = [`flowchart ${direction}`];
+  const nodeIds = [];
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
     if (!trimmed || /^\s*agentflow-beta\b/i.test(trimmed)) continue;
@@ -25427,6 +25550,7 @@ function transpileAgentFlow(source) {
       const id2 = shapeNodeMatch[1];
       const label = shapeNodeMatch[2];
       const shape = shapeNodeMatch[3].toLowerCase();
+      if (!nodeIds.includes(id2)) nodeIds.push(id2);
       if (shape === "input") {
         output.push(`    ${id2}[/"\u{1F4E5} ${label}"/]`);
       } else if (shape === "output") {
@@ -25440,8 +25564,16 @@ function transpileAgentFlow(source) {
       }
       continue;
     }
+    const stdMatch = trimmed.match(/^([A-Za-z0-9_]+)(?:\[.*?\]|\(.*?\)|>.*?\]|\{.*?\}|\/.*?\/)/);
+    if (stdMatch && !trimmed.includes("-->") && !trimmed.includes("---")) {
+      const id2 = stdMatch[1];
+      if (!nodeIds.includes(id2)) nodeIds.push(id2);
+    }
     output.push(`    ${trimmed}`);
   }
+  nodeIds.forEach((id2, idx) => {
+    output.push(`    class ${id2} step${idx % 6};`);
+  });
   return output.join("\n");
 }
 function transpileTreeView(source) {
@@ -25512,6 +25644,7 @@ function transpileCynefin(source) {
   output.push('        subgraph TopRow [" "]');
   output.push("            direction LR");
   output.push('            subgraph Complex ["\u{1F300} Complex<br/><i>Probe \xB7 Sense \xB7 Respond</i>"]');
+  output.push("                direction TB");
   if (domains.complex.length === 0) {
     output.push('                c_empty["(No active items)"]');
   } else {
@@ -25521,6 +25654,7 @@ function transpileCynefin(source) {
   }
   output.push("            end");
   output.push('            subgraph Complicated ["\u{1F50D} Complicated<br/><i>Sense \xB7 Analyze \xB7 Respond</i>"]');
+  output.push("                direction TB");
   if (domains.complicated.length === 0) {
     output.push('                comp_empty["(No active items)"]');
   } else {
@@ -25533,6 +25667,7 @@ function transpileCynefin(source) {
   output.push('        subgraph BottomRow [" "]');
   output.push("            direction LR");
   output.push('            subgraph Chaotic ["\u26A1 Chaotic<br/><i>Act \xB7 Sense \xB7 Respond</i>"]');
+  output.push("                direction TB");
   if (domains.chaotic.length === 0) {
     output.push('                ch_empty["(No active items)"]');
   } else {
@@ -25542,6 +25677,7 @@ function transpileCynefin(source) {
   }
   output.push("            end");
   output.push('            subgraph Clear ["\u2705 Clear<br/><i>Sense \xB7 Categorize \xB7 Respond</i>"]');
+  output.push("                direction TB");
   if (domains.clear.length === 0) {
     output.push('                cl_empty["(No active items)"]');
   } else {
@@ -25554,6 +25690,7 @@ function transpileCynefin(source) {
   output.push("        TopRow ~~~ BottomRow");
   if (domains.disorder.length > 0) {
     output.push('        subgraph Disorder ["\u2753 Disorder / Aporia"]');
+    output.push("            direction TB");
     domains.disorder.forEach((item, idx) => {
       output.push(`            dis_${idx + 1}["${item}"]`);
     });
@@ -25561,6 +25698,11 @@ function transpileCynefin(source) {
     output.push("        BottomRow ~~~ Disorder");
   }
   output.push("    end");
+  domains.complex.forEach((_, idx) => output.push(`    class c_${idx + 1} step0;`));
+  domains.complicated.forEach((_, idx) => output.push(`    class comp_${idx + 1} step1;`));
+  domains.chaotic.forEach((_, idx) => output.push(`    class ch_${idx + 1} step2;`));
+  domains.clear.forEach((_, idx) => output.push(`    class cl_${idx + 1} step3;`));
+  domains.disorder.forEach((_, idx) => output.push(`    class dis_${idx + 1} step4;`));
   return output.join("\n");
 }
 function transpileWardley(source) {
@@ -26033,7 +26175,7 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
             pie6: palette.fills[5]
           } : {},
           pieTitleTextColor: palette.text,
-          pieSectionTextColor: palette.text,
+          pieSectionTextColor: "#ffffff",
           pieLegendTextColor: palette.text,
           pieStrokeColor: palette.border,
           // Git graphs
@@ -26043,12 +26185,21 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
             git2: palette.fills[2],
             git3: palette.fills[3],
             git4: palette.fills[4],
-            git5: palette.fills[5]
+            git5: palette.fills[5],
+            git6: palette.fills[0],
+            git7: palette.fills[1]
           } : {},
-          gitCommitLabelColor: palette.text,
-          gitBranchLabel0: palette.text,
-          tagLabelBackground: palette.label,
-          tagLabelBorder: palette.border,
+          gitBranchLabel0: "#ffffff",
+          gitBranchLabel1: "#ffffff",
+          gitBranchLabel2: "#ffffff",
+          gitBranchLabel3: "#ffffff",
+          gitBranchLabel4: "#ffffff",
+          gitBranchLabel5: "#ffffff",
+          gitCommitLabelColor: "#ffffff",
+          gitCommitLabelBackground: dark ? "#1e293b" : "#334155",
+          tagLabelColor: "#ffffff",
+          tagLabelBackground: palette.accent,
+          tagLabelBorder: palette.accent,
           // Timelines (12-slot color wheel with WCAG AA verified label and text contrast)
           ...palette.fills.length >= 6 ? {
             cScale0: palette.fills[0],

@@ -368,6 +368,7 @@ export function transpileAgentFlow(source: string): string {
   const dirMatch = source.match(/^agentflow-beta\s+([A-Za-z]+)/i);
   const direction = dirMatch ? dirMatch[1].toUpperCase() : 'TB';
   const output: string[] = [`flowchart ${direction}`];
+  const nodeIds: string[] = [];
 
   for (const rawLine of lines) {
     const trimmed = rawLine.trim();
@@ -393,6 +394,7 @@ export function transpileAgentFlow(source: string): string {
       const id = shapeNodeMatch[1];
       const label = shapeNodeMatch[2];
       const shape = shapeNodeMatch[3].toLowerCase();
+      if (!nodeIds.includes(id)) nodeIds.push(id);
 
       if (shape === 'input') {
         output.push(`    ${id}[/"📥 ${label}"/]`);
@@ -408,8 +410,20 @@ export function transpileAgentFlow(source: string): string {
       continue;
     }
 
+    // Standard node definitions
+    const stdMatch = trimmed.match(/^([A-Za-z0-9_]+)(?:\[.*?\]|\(.*?\)|>.*?\]|\{.*?\}|\/.*?\/)/);
+    if (stdMatch && !trimmed.includes('-->') && !trimmed.includes('---')) {
+      const id = stdMatch[1];
+      if (!nodeIds.includes(id)) nodeIds.push(id);
+    }
+
     output.push(`    ${trimmed}`);
   }
+
+  // Assign distinct sequential stage classes so each pipeline step has a coordinated color
+  nodeIds.forEach((id, idx) => {
+    output.push(`    class ${id} step${idx % 6};`);
+  });
 
   return output.join('\n');
 }
@@ -511,6 +525,7 @@ export function transpileCynefin(source: string): string {
   output.push('        subgraph TopRow [" "]');
   output.push('            direction LR');
   output.push('            subgraph Complex ["🌀 Complex<br/><i>Probe · Sense · Respond</i>"]');
+  output.push('                direction TB');
   if (domains.complex!.length === 0) {
     output.push('                c_empty["(No active items)"]');
   } else {
@@ -520,6 +535,7 @@ export function transpileCynefin(source: string): string {
   }
   output.push('            end');
   output.push('            subgraph Complicated ["🔍 Complicated<br/><i>Sense · Analyze · Respond</i>"]');
+  output.push('                direction TB');
   if (domains.complicated!.length === 0) {
     output.push('                comp_empty["(No active items)"]');
   } else {
@@ -533,6 +549,7 @@ export function transpileCynefin(source: string): string {
   output.push('        subgraph BottomRow [" "]');
   output.push('            direction LR');
   output.push('            subgraph Chaotic ["⚡ Chaotic<br/><i>Act · Sense · Respond</i>"]');
+  output.push('                direction TB');
   if (domains.chaotic!.length === 0) {
     output.push('                ch_empty["(No active items)"]');
   } else {
@@ -542,6 +559,7 @@ export function transpileCynefin(source: string): string {
   }
   output.push('            end');
   output.push('            subgraph Clear ["✅ Clear<br/><i>Sense · Categorize · Respond</i>"]');
+  output.push('                direction TB');
   if (domains.clear!.length === 0) {
     output.push('                cl_empty["(No active items)"]');
   } else {
@@ -556,6 +574,7 @@ export function transpileCynefin(source: string): string {
 
   if (domains.disorder!.length > 0) {
     output.push('        subgraph Disorder ["❓ Disorder / Aporia"]');
+    output.push('            direction TB');
     domains.disorder!.forEach((item, idx) => {
       output.push(`            dis_${idx + 1}["${item}"]`);
     });
@@ -564,6 +583,14 @@ export function transpileCynefin(source: string): string {
   }
 
   output.push('    end');
+
+  // Coordinated quadrant stage colors
+  domains.complex!.forEach((_, idx) => output.push(`    class c_${idx + 1} step0;`));
+  domains.complicated!.forEach((_, idx) => output.push(`    class comp_${idx + 1} step1;`));
+  domains.chaotic!.forEach((_, idx) => output.push(`    class ch_${idx + 1} step2;`));
+  domains.clear!.forEach((_, idx) => output.push(`    class cl_${idx + 1} step3;`));
+  domains.disorder!.forEach((_, idx) => output.push(`    class dis_${idx + 1} step4;`));
+
   return output.join('\n');
 }
 

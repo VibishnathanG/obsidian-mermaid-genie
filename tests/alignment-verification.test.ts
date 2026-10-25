@@ -407,7 +407,7 @@ describe('Alignment & Layout Precision Tests', () => {
 
     const enhanced = styleSvg(ganttSvg, '', DEFAULT_SETTINGS, palette, true);
     assert.ok(!enhanced.includes('c4-rel-pill'), 'Gantt chart grid date ticks must never receive c4-rel-pill elements');
-    assert.ok(enhanced.includes('fill="#0f172a"'), 'Active task text on light accent bar in dark mode must be dark #0f172a');
+    assert.ok(enhanced.includes('fill="#ffffff"'), 'Active task text on task bar must be high contrast white #ffffff');
     assert.ok(enhanced.includes(`fill="${palette.text}"`), 'Grid tick and section titles should use palette text color');
   });
 });

@@ -294,7 +294,7 @@ export default class MermaidGeniePlugin extends Plugin {
             pie6: palette.fills[5],
           } : {}),
           pieTitleTextColor: palette.text,
-          pieSectionTextColor: palette.text,
+          pieSectionTextColor: '#ffffff',
           pieLegendTextColor: palette.text,
           pieStrokeColor: palette.border,
 
@@ -306,11 +306,20 @@ export default class MermaidGeniePlugin extends Plugin {
             git3: palette.fills[3],
             git4: palette.fills[4],
             git5: palette.fills[5],
+            git6: palette.fills[0],
+            git7: palette.fills[1],
           } : {}),
-          gitCommitLabelColor: palette.text,
-          gitBranchLabel0: palette.text,
-          tagLabelBackground: palette.label,
-          tagLabelBorder: palette.border,
+          gitBranchLabel0: '#ffffff',
+          gitBranchLabel1: '#ffffff',
+          gitBranchLabel2: '#ffffff',
+          gitBranchLabel3: '#ffffff',
+          gitBranchLabel4: '#ffffff',
+          gitBranchLabel5: '#ffffff',
+          gitCommitLabelColor: '#ffffff',
+          gitCommitLabelBackground: dark ? '#1e293b' : '#334155',
+          tagLabelColor: '#ffffff',
+          tagLabelBackground: palette.accent,
+          tagLabelBorder: palette.accent,
 
           // Timelines (12-slot color wheel with WCAG AA verified label and text contrast)
           ...(palette.fills.length >= 6 ? {

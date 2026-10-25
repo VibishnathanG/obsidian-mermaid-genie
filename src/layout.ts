@@ -866,8 +866,8 @@ export function fixGanttChart(doc: Document, palette: PaletteData, dark: boolean
   const isGantt = root.classList.contains('gantt') || !!doc.querySelector('.grid .tick, .taskText, .sectionTitle, rect.task');
   if (!isGantt) return;
 
-  // Active task text: high contrast against accent fill
-  const activeTextColor = dark ? '#0f172a' : '#ffffff';
+  // Active task text: high contrast white text matching all task bars
+  const activeTextColor = '#ffffff';
   for (const text of doc.querySelectorAll('[class*="activeText"], .taskText.active, .task.active + text')) {
     text.setAttribute('fill', activeTextColor);
     if ((text as HTMLElement).style) {
@@ -1180,7 +1180,7 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
   }
 
   // Dividers
-  for (const divider of doc.querySelectorAll('g.divider path, line.divider, path.pele-er-divider, [class*="divider"]')) {
+  for (const divider of doc.querySelectorAll('g.divider path, line.divider, path.pele-er-divider, path.divider')) {
     divider.setAttribute('stroke', palette.border);
     divider.setAttribute('stroke-width', '1.5px');
     divider.setAttribute('fill', 'none');
@@ -1190,6 +1190,11 @@ export function fixEntityRelationshipDiagram(doc: Document, palette: PaletteData
       (divider as HTMLElement).style.setProperty('fill', 'none', 'important');
       (divider as HTMLElement).style.setProperty('display', 'block', 'important');
     }
+  }
+
+  // Remove duplicate/conflicting inner patch rect stripes
+  for (const stripes of doc.querySelectorAll('g.pele-er-stripes')) {
+    stripes.remove();
   }
 
   // Entity title
@@ -1459,6 +1464,143 @@ export function fixPacketDiagram(doc: Document, palette: PaletteData, _dark: boo
           textEl.style.setProperty('color', textColor, 'important');
         }
       }
+    }
+  }
+}
+
+/**
+ * Enhances Pie charts with guaranteed crisp white inner percentage text and clear legend typography.
+ */
+export function fixPieChart(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isPie = root.classList.contains('pie') || !!doc.querySelector('.pieCircle, .pieTitleText, .slice');
+  if (!isPie) return;
+
+  // Title
+  for (const t of doc.querySelectorAll('.pieTitleText, text.pieTitleText')) {
+    t.setAttribute('fill', palette.text);
+    if ((t as HTMLElement).style) (t as HTMLElement).style.setProperty('fill', palette.text, 'important');
+  }
+
+  // Inner slice percentage text must be white for high contrast
+  for (const s of doc.querySelectorAll('.slice, text.slice, .pieCircleText, [class*="slice"]')) {
+    s.setAttribute('fill', '#ffffff');
+    s.setAttribute('style', 'fill: #ffffff !important; color: #ffffff !important; font-weight: 600 !important;');
+    if ((s as HTMLElement).style) {
+      (s as HTMLElement).style.setProperty('fill', '#ffffff', 'important');
+      (s as HTMLElement).style.setProperty('color', '#ffffff', 'important');
+      (s as HTMLElement).style.setProperty('font-weight', '600', 'important');
+    }
+  }
+
+  // Legend text
+  for (const l of doc.querySelectorAll('.legend text, g.legend text')) {
+    l.setAttribute('fill', palette.text);
+    if ((l as HTMLElement).style) (l as HTMLElement).style.setProperty('fill', palette.text, 'important');
+  }
+}
+
+/**
+ * Redesigns Git graphs with high visibility, crisp white text, coordinated branch colors, and styled commit badges.
+ */
+export function fixGitGraph(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isGit = root.classList.contains('gitGraph') || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, [class*="branch0"]');
+  if (!isGit) return;
+
+  const fills = palette.fills.length > 0 ? palette.fills : ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const borders = palette.borders.length > 0 ? palette.borders : fills;
+
+  // 1. Branch guide lines: distinct palette branch colors
+  for (let b = 0; b < 10; b++) {
+    const branchColor = fills[b % fills.length]!;
+    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}`)) {
+      line.setAttribute('stroke', branchColor);
+      line.setAttribute('stroke-width', '2.5px');
+      line.setAttribute('stroke-dasharray', 'none');
+      if ((line as HTMLElement).style) {
+        (line as HTMLElement).style.setProperty('stroke', branchColor, 'important');
+        (line as HTMLElement).style.setProperty('stroke-width', '2.5px', 'important');
+      }
+    }
+    // Branch arrow paths
+    for (const arrow of doc.querySelectorAll(`.arrow${b}, path.arrow${b}`)) {
+      arrow.setAttribute('stroke', branchColor);
+      arrow.setAttribute('fill', 'none');
+      if ((arrow as HTMLElement).style) {
+        (arrow as HTMLElement).style.setProperty('stroke', branchColor, 'important');
+      }
+    }
+    // Branch labels
+    for (const bkg of doc.querySelectorAll(`rect.branchLabelBkg.label${b}, rect.label${b}`)) {
+      bkg.setAttribute('fill', branchColor);
+      bkg.setAttribute('stroke', borders[b % borders.length]!);
+      bkg.setAttribute('rx', '5');
+      bkg.setAttribute('ry', '5');
+      if ((bkg as HTMLElement).style) {
+        (bkg as HTMLElement).style.setProperty('fill', branchColor, 'important');
+        (bkg as HTMLElement).style.setProperty('stroke', borders[b % borders.length]!, 'important');
+      }
+    }
+    for (const btext of doc.querySelectorAll(`.branch-label${b} text, .branch-label${b}`)) {
+      btext.setAttribute('fill', '#ffffff');
+      if ((btext as HTMLElement).style) {
+        (btext as HTMLElement).style.setProperty('fill', '#ffffff', 'important');
+        (btext as HTMLElement).style.setProperty('color', '#ffffff', 'important');
+        (btext as HTMLElement).style.setProperty('font-weight', '700', 'important');
+      }
+    }
+    // Commit circles
+    for (const circle of doc.querySelectorAll(`circle.commit.commit${b}, circle.commit${b}`)) {
+      circle.setAttribute('fill', branchColor);
+      circle.setAttribute('stroke', '#ffffff');
+      circle.setAttribute('stroke-width', '2px');
+      circle.setAttribute('r', '5.5');
+      if ((circle as HTMLElement).style) {
+        (circle as HTMLElement).style.setProperty('fill', branchColor, 'important');
+        (circle as HTMLElement).style.setProperty('stroke', '#ffffff', 'important');
+        (circle as HTMLElement).style.setProperty('stroke-width', '2px', 'important');
+      }
+    }
+  }
+
+  // 2. Commit labels: clear visibility, white text, sleek pill backgrounds
+  for (const bkg of doc.querySelectorAll('rect.commit-label-bkg')) {
+    const bkgFill = dark ? '#1e293b' : '#0f172a';
+    bkg.setAttribute('fill', bkgFill);
+    bkg.setAttribute('stroke', '#475569');
+    bkg.setAttribute('stroke-width', '1px');
+    bkg.setAttribute('rx', '4');
+    bkg.setAttribute('ry', '4');
+    bkg.setAttribute('opacity', '0.94');
+    if ((bkg as HTMLElement).style) {
+      (bkg as HTMLElement).style.setProperty('fill', bkgFill, 'important');
+      (bkg as HTMLElement).style.setProperty('stroke', '#475569', 'important');
+      (bkg as HTMLElement).style.setProperty('opacity', '0.94', 'important');
+    }
+  }
+
+  for (const text of doc.querySelectorAll('text.commit-label, .commit-label text')) {
+    text.setAttribute('fill', '#ffffff');
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.setProperty('fill', '#ffffff', 'important');
+      (text as HTMLElement).style.setProperty('color', '#ffffff', 'important');
+      (text as HTMLElement).style.setProperty('font-weight', '600', 'important');
+      (text as HTMLElement).style.setProperty('font-size', '12px', 'important');
+    }
+  }
+
+  // 3. Tags
+  for (const tagBkg of doc.querySelectorAll('polygon.tag-label-bkg, rect.tag-label-bkg, path.tag-label-bkg')) {
+    tagBkg.setAttribute('fill', palette.accent);
+    tagBkg.setAttribute('stroke', palette.accent);
+  }
+  for (const tagText of doc.querySelectorAll('text.tag-label, .tag-label text')) {
+    const tagTextColor = dark ? '#0f172a' : '#ffffff';
+    tagText.setAttribute('fill', tagTextColor);
+    if ((tagText as HTMLElement).style) {
+      (tagText as HTMLElement).style.setProperty('fill', tagTextColor, 'important');
+      (tagText as HTMLElement).style.setProperty('font-weight', '700', 'important');
     }
   }
 }
@@ -2012,6 +2154,17 @@ export function styleSvg(
   fixKanbanDiagram(doc, palette, dark);
   fixTreemapDiagram(doc, palette, dark);
   fixPacketDiagram(doc, palette, dark);
+  fixPieChart(doc, palette, dark);
+  fixGitGraph(doc, palette, dark);
+
+  // Ensure cluster / subgraph titles and labels are always centered
+  for (const cl of doc.querySelectorAll('.cluster-label text, text.pele-cluster-label, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel')) {
+    cl.setAttribute('text-anchor', 'middle');
+    if ((cl as HTMLElement).style) {
+      (cl as HTMLElement).style.setProperty('text-anchor', 'middle', 'important');
+      (cl as HTMLElement).style.setProperty('text-align', 'center', 'important');
+    }
+  }
 
   // Mark SVG as enhanced and set custom properties
   root.classList?.add?.('mfe-enhanced', 'mermaid-genie-diagram');
