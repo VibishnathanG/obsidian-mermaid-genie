@@ -190,6 +190,7 @@ export function enhancePeleSvg(
   const isPeleGit = root.classList.contains('pele-gitGraph') || root.getAttribute('aria-roledescription') === 'gitGraph';
   const isPeleWardley = root.classList.contains('pele-wardley') || root.getAttribute('aria-roledescription') === 'wardley';
   const isPeleCynefin = root.classList.contains('pele-cynefin') || root.getAttribute('aria-roledescription') === 'cynefin';
+  const isPeleMindmap = root.classList.contains('pele-mindmap') || root.getAttribute('aria-roledescription') === 'mindmap';
 
   // 1. Flowcharts: Coordinated branch palette
   if (isPeleFlowchart) {
@@ -1142,6 +1143,49 @@ export function enhancePeleSvg(
       title.setAttribute('fill', palette.text);
       setElStyle(title, 'text-anchor', 'middle', true);
       setElStyle(title, 'text-align', 'center', true);
+    }
+  }
+
+  // 18. Mindmaps: Crisp typography, clear font hierarchy, and high contrast in dark/light modes
+  if (isPeleMindmap) {
+    const rootColor = dark ? '#ffffff' : '#0f172a';
+    const branchColor = dark ? '#f8fafc' : '#0f172a';
+    const leafColor = dark ? '#e2e8f0' : '#1e293b';
+
+    const rootNode = doc.querySelector('g.pele-node.pele-root');
+    if (rootNode) {
+      const text = rootNode.querySelector('text');
+      if (text) {
+        text.setAttribute('fill', rootColor);
+        setElStyle(text, 'fill', rootColor, true);
+        setElStyle(text, 'color', rootColor, true);
+        setElStyle(text, 'font-weight', '700', true);
+      }
+    }
+
+    for (const branch of Array.from(doc.querySelectorAll('g.pele-node.pele-shape-branch'))) {
+      const text = branch.querySelector('text');
+      if (text) {
+        text.setAttribute('fill', branchColor);
+        setElStyle(text, 'fill', branchColor, true);
+        setElStyle(text, 'color', branchColor, true);
+        setElStyle(text, 'font-weight', '600', true);
+      }
+    }
+
+    for (const leaf of Array.from(doc.querySelectorAll('g.pele-node.pele-shape-text'))) {
+      const text = leaf.querySelector('text');
+      if (text) {
+        text.setAttribute('fill', leafColor);
+        setElStyle(text, 'fill', leafColor, true);
+        setElStyle(text, 'color', leafColor, true);
+        setElStyle(text, 'font-weight', '500', true);
+        for (const tspan of Array.from(text.querySelectorAll('tspan'))) {
+          tspan.setAttribute('fill', leafColor);
+          setElStyle(tspan, 'fill', leafColor, true);
+          setElStyle(tspan, 'color', leafColor, true);
+        }
+      }
     }
   }
 

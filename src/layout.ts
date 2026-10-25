@@ -1553,7 +1553,7 @@ export function fixPieChart(doc: Document, palette: PaletteData, dark: boolean):
 export function fixGitGraph(doc: Document, palette: PaletteData, dark: boolean): void {
   const root = doc.documentElement;
   const isGit = root.classList.contains('gitGraph') || root.classList.contains('pele-gitGraph') ||
-    !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, g.pele-branch, [class*="branch0"]');
+    !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, .pele-gitGraph g.pele-branch, [class*="branch0"]');
   if (!isGit) return;
 
   const branchColors = dark
@@ -1653,6 +1653,59 @@ export function fixGitGraph(doc: Document, palette: PaletteData, dark: boolean):
     if ((tagText as HTMLElement).style) {
       (tagText as HTMLElement).style.setProperty('fill', tagTextColor, 'important');
       (tagText as HTMLElement).style.setProperty('font-weight', '700', 'important');
+    }
+  }
+}
+
+/**
+ * Styles Mindmap nodes with crisp, high-contrast typography, clear hierarchy, and dark/light visibility.
+ */
+export function fixMindmapDiagram(doc: Document, palette: PaletteData, dark: boolean): void {
+  const root = doc.documentElement;
+  const isMindmap = root.classList.contains('pele-mindmap') ||
+    root.classList.contains('mindmap') ||
+    root.getAttribute('aria-roledescription') === 'mindmap' ||
+    !!doc.querySelector('.mindmap-node, g.pele-mindmap, g.pele-node.pele-shape-branch, g.pele-node.pele-shape-text');
+  if (!isMindmap) return;
+
+  const rootColor = dark ? '#ffffff' : '#0f172a';
+  const branchColor = dark ? '#f8fafc' : '#0f172a';
+  const leafColor = dark ? '#e2e8f0' : '#1e293b';
+
+  // 1. Root node text
+  for (const text of doc.querySelectorAll(':is(.pele-root, .section-root) :is(text, .pele-label, .nodeLabel)')) {
+    text.setAttribute('fill', rootColor);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.setProperty('fill', rootColor, 'important');
+      (text as HTMLElement).style.setProperty('color', rootColor, 'important');
+      (text as HTMLElement).style.setProperty('font-weight', '700', 'important');
+    }
+  }
+
+  // 2. Branch pill nodes
+  for (const text of doc.querySelectorAll(':is(g.pele-shape-branch, .section-0, .section-1, .section-2, .section-3, .section-4, .section-5) :is(text, .pele-label, .nodeLabel)')) {
+    text.setAttribute('fill', branchColor);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.setProperty('fill', branchColor, 'important');
+      (text as HTMLElement).style.setProperty('color', branchColor, 'important');
+      (text as HTMLElement).style.setProperty('font-weight', '600', 'important');
+    }
+  }
+
+  // 3. Leaf text nodes
+  for (const text of doc.querySelectorAll(':is(g.pele-shape-text, .mindmap-node:not(.section-root):not(.section-0):not(.section-1):not(.section-2):not(.section-3):not(.section-4):not(.section-5)) :is(text, .pele-label, .nodeLabel)')) {
+    text.setAttribute('fill', leafColor);
+    if ((text as HTMLElement).style) {
+      (text as HTMLElement).style.setProperty('fill', leafColor, 'important');
+      (text as HTMLElement).style.setProperty('color', leafColor, 'important');
+      (text as HTMLElement).style.setProperty('font-weight', '500', 'important');
+    }
+    for (const tspan of text.querySelectorAll('tspan')) {
+      tspan.setAttribute('fill', leafColor);
+      if (tspan.style) {
+        tspan.style.setProperty('fill', leafColor, 'important');
+        tspan.style.setProperty('color', leafColor, 'important');
+      }
     }
   }
 }
@@ -2208,6 +2261,7 @@ export function styleSvg(
   fixPacketDiagram(doc, palette, dark);
   fixPieChart(doc, palette, dark);
   fixGitGraph(doc, palette, dark);
+  fixMindmapDiagram(doc, palette, dark);
 
   // Center cluster titles for Cynefin, Wardley Map, and Architecture Diagram
   for (const cluster of doc.querySelectorAll('g.cluster[id*="wardley" i], g.pele-cluster[data-id="Wardley"], g.cluster[id*="cloud"], g.cluster[id*="arch"]')) {

@@ -2652,7 +2652,7 @@ function fixPieChart(doc, palette, dark) {
 }
 function fixGitGraph(doc, palette, dark) {
   const root = doc.documentElement;
-  const isGit = root.classList.contains("gitGraph") || root.classList.contains("pele-gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, g.pele-branch, [class*="branch0"]');
+  const isGit = root.classList.contains("gitGraph") || root.classList.contains("pele-gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, .pele-gitGraph g.pele-branch, [class*="branch0"]');
   if (!isGit) return;
   const branchColors = dark ? ["#7dd3fc", "#6ee7b7", "#fde047", "#c4b5fd", "#67e8f9", "#f472b6"] : ["#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"];
   for (let b = 0; b < 10; b++) {
@@ -2739,6 +2739,45 @@ function fixGitGraph(doc, palette, dark) {
     if (tagText.style) {
       tagText.style.setProperty("fill", tagTextColor, "important");
       tagText.style.setProperty("font-weight", "700", "important");
+    }
+  }
+}
+function fixMindmapDiagram(doc, palette, dark) {
+  const root = doc.documentElement;
+  const isMindmap = root.classList.contains("pele-mindmap") || root.classList.contains("mindmap") || root.getAttribute("aria-roledescription") === "mindmap" || !!doc.querySelector(".mindmap-node, g.pele-mindmap, g.pele-node.pele-shape-branch, g.pele-node.pele-shape-text");
+  if (!isMindmap) return;
+  const rootColor = dark ? "#ffffff" : "#0f172a";
+  const branchColor = dark ? "#f8fafc" : "#0f172a";
+  const leafColor = dark ? "#e2e8f0" : "#1e293b";
+  for (const text of doc.querySelectorAll(":is(.pele-root, .section-root) :is(text, .pele-label, .nodeLabel)")) {
+    text.setAttribute("fill", rootColor);
+    if (text.style) {
+      text.style.setProperty("fill", rootColor, "important");
+      text.style.setProperty("color", rootColor, "important");
+      text.style.setProperty("font-weight", "700", "important");
+    }
+  }
+  for (const text of doc.querySelectorAll(":is(g.pele-shape-branch, .section-0, .section-1, .section-2, .section-3, .section-4, .section-5) :is(text, .pele-label, .nodeLabel)")) {
+    text.setAttribute("fill", branchColor);
+    if (text.style) {
+      text.style.setProperty("fill", branchColor, "important");
+      text.style.setProperty("color", branchColor, "important");
+      text.style.setProperty("font-weight", "600", "important");
+    }
+  }
+  for (const text of doc.querySelectorAll(":is(g.pele-shape-text, .mindmap-node:not(.section-root):not(.section-0):not(.section-1):not(.section-2):not(.section-3):not(.section-4):not(.section-5)) :is(text, .pele-label, .nodeLabel)")) {
+    text.setAttribute("fill", leafColor);
+    if (text.style) {
+      text.style.setProperty("fill", leafColor, "important");
+      text.style.setProperty("color", leafColor, "important");
+      text.style.setProperty("font-weight", "500", "important");
+    }
+    for (const tspan of text.querySelectorAll("tspan")) {
+      tspan.setAttribute("fill", leafColor);
+      if (tspan.style) {
+        tspan.style.setProperty("fill", leafColor, "important");
+        tspan.style.setProperty("color", leafColor, "important");
+      }
     }
   }
 }
@@ -3206,6 +3245,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
   fixPacketDiagram(doc, palette, dark);
   fixPieChart(doc, palette, dark);
   fixGitGraph(doc, palette, dark);
+  fixMindmapDiagram(doc, palette, dark);
   for (const cluster of doc.querySelectorAll('g.cluster[id*="wardley" i], g.pele-cluster[data-id="Wardley"], g.cluster[id*="cloud"], g.cluster[id*="arch"]')) {
     const rect = cluster.querySelector(":scope > rect, rect");
     const label = cluster.querySelector(".cluster-label text, .cluster-label span, text.pele-cluster-label, .cluster-label .nodeLabel, text.pele-title");
@@ -24574,6 +24614,7 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
   const isPeleGit = root.classList.contains("pele-gitGraph") || root.getAttribute("aria-roledescription") === "gitGraph";
   const isPeleWardley = root.classList.contains("pele-wardley") || root.getAttribute("aria-roledescription") === "wardley";
   const isPeleCynefin = root.classList.contains("pele-cynefin") || root.getAttribute("aria-roledescription") === "cynefin";
+  const isPeleMindmap = root.classList.contains("pele-mindmap") || root.getAttribute("aria-roledescription") === "mindmap";
   if (isPeleFlowchart) {
     applyFlowchartColors(root, palette, dark, settings.colorStyle);
   }
@@ -25392,6 +25433,44 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
       title.setAttribute("fill", palette.text);
       setElStyle(title, "text-anchor", "middle", true);
       setElStyle(title, "text-align", "center", true);
+    }
+  }
+  if (isPeleMindmap) {
+    const rootColor = dark ? "#ffffff" : "#0f172a";
+    const branchColor = dark ? "#f8fafc" : "#0f172a";
+    const leafColor = dark ? "#e2e8f0" : "#1e293b";
+    const rootNode = doc.querySelector("g.pele-node.pele-root");
+    if (rootNode) {
+      const text = rootNode.querySelector("text");
+      if (text) {
+        text.setAttribute("fill", rootColor);
+        setElStyle(text, "fill", rootColor, true);
+        setElStyle(text, "color", rootColor, true);
+        setElStyle(text, "font-weight", "700", true);
+      }
+    }
+    for (const branch of Array.from(doc.querySelectorAll("g.pele-node.pele-shape-branch"))) {
+      const text = branch.querySelector("text");
+      if (text) {
+        text.setAttribute("fill", branchColor);
+        setElStyle(text, "fill", branchColor, true);
+        setElStyle(text, "color", branchColor, true);
+        setElStyle(text, "font-weight", "600", true);
+      }
+    }
+    for (const leaf of Array.from(doc.querySelectorAll("g.pele-node.pele-shape-text"))) {
+      const text = leaf.querySelector("text");
+      if (text) {
+        text.setAttribute("fill", leafColor);
+        setElStyle(text, "fill", leafColor, true);
+        setElStyle(text, "color", leafColor, true);
+        setElStyle(text, "font-weight", "500", true);
+        for (const tspan of Array.from(text.querySelectorAll("tspan"))) {
+          tspan.setAttribute("fill", leafColor);
+          setElStyle(tspan, "fill", leafColor, true);
+          setElStyle(tspan, "color", leafColor, true);
+        }
+      }
     }
   }
   return new XMLSerializer().serializeToString(doc.documentElement);

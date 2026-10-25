@@ -474,13 +474,13 @@
   opacity: 1 !important;
 }
 
-.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-branch text) {
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-gitGraph .pele-branch text) {
   fill: #0f172a !important;
   color: #0f172a !important;
   font-weight: 700 !important;
 }
 
-.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-branch text) {
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.branch-label, [class*="branch-label"], [class*="branch-label"] text, .branchLabel, .pele-gitGraph .pele-branch text) {
   fill: #ffffff !important;
   color: #ffffff !important;
   font-weight: 700 !important;
@@ -525,6 +525,67 @@
 
 .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.tag-label, [class*="tag-label"]) {
   font-weight: 600 !important;
+}
+
+/* --- Mindmap Typography & High-Contrast Fonts --- */
+.mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(text, tspan, .pele-label, .nodeLabel) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif !important;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(text, tspan, .pele-label, .nodeLabel),
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(text, tspan, .pele-label, .nodeLabel) {
+  fill: #f1f5f9 !important;
+  color: #f1f5f9 !important;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(.pele-root, .section-root) :is(text, tspan, .pele-label) {
+  fill: #ffffff !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 15.5px !important;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(.pele-shape-branch, .section-0, .section-1, .section-2, .section-3, .section-4, .section-5) :is(text, tspan, .pele-label) {
+  fill: #f8fafc !important;
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+  font-size: 14.5px !important;
+}
+
+.theme-dark .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) .pele-shape-text :is(text, tspan, .pele-label) {
+  fill: #e2e8f0 !important;
+  color: #e2e8f0 !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(text, tspan, .pele-label, .nodeLabel),
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style) :is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(text, tspan, .pele-label, .nodeLabel) {
+  fill: #1e293b !important;
+  color: #1e293b !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(.pele-root, .section-root) :is(text, tspan, .pele-label) {
+  fill: #0f172a !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  font-size: 15.5px !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) :is(.pele-shape-branch, .section-0, .section-1, .section-2, .section-3, .section-4, .section-5) :is(text, tspan, .pele-label) {
+  fill: #0f172a !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+  font-size: 14.5px !important;
+}
+
+.theme-light .mermaid svg.mfe-enhanced:not(#mfe-native-style#mfe-theme-style):is(.pele-mindmap, .mindmap, [aria-roledescription="mindmap"]) .pele-shape-text :is(text, tspan, .pele-label) {
+  fill: #334155 !important;
+  color: #334155 !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
 }
 
 /* XY Charts & Quadrants */

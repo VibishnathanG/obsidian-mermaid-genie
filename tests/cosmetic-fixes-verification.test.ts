@@ -282,4 +282,41 @@ describe('Six User Defect Fixes Verification', () => {
     assert.equal(preNode.style.getPropertyValue('--node-fill'), palette.fills[1]);
     assert.equal(renderNode.style.getPropertyValue('--node-fill'), palette.fills[2]);
   });
+
+  // 7. Mindmap font styling and high contrast (D15)
+  it('7. Mindmap: ensures crisp high-contrast fonts across root, branch, and leaf nodes in dark mode', () => {
+    const mindmapCode = `mindmap
+      root((Obsidian Mermaid Genie))
+        Visual Aesthetics
+          Coordinated Color Palettes
+        Geometry & Routing
+          Orthogonal Step Connectors`;
+
+    const svg = renderWithPele({
+      text: mindmapCode,
+      id: 'mindmap-font-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    assert.ok(svg);
+    const styled = styleSvg(svg, '', DEFAULT_SETTINGS, palette, true);
+    const d = new JSDOM(styled).window.document;
+
+    const rootText = d.querySelector('.pele-root text');
+    assert.ok(rootText);
+    assert.equal(rootText.getAttribute('fill'), '#ffffff');
+
+    const branchTexts = Array.from(d.querySelectorAll('.pele-shape-branch text'));
+    assert.ok(branchTexts.length > 0);
+    for (const bt of branchTexts) {
+      assert.equal((bt as Element).getAttribute('fill'), '#f8fafc');
+    }
+
+    const leafTexts = Array.from(d.querySelectorAll('.pele-shape-text text'));
+    assert.ok(leafTexts.length > 0);
+    for (const lt of leafTexts) {
+      assert.equal((lt as Element).getAttribute('fill'), '#e2e8f0');
+    }
+  });
 });
