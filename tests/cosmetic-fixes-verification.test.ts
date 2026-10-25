@@ -105,10 +105,12 @@ describe('Six User Defect Fixes Verification', () => {
     assert.equal(activeText.getAttribute('fill'), '#ffffff', 'Active task bar text must be white #ffffff');
   });
 
-  // 3. Pie Chart inner percentage text white (D09)
-  it('3. Pie Chart: ensures inner slice percentage text is white #ffffff', () => {
+  // 3. Pie Chart inner white percentage and distinct slice colors (D09)
+  it('3. Pie Chart: ensures inner slice percentage text is white #ffffff and slices have distinct colors', () => {
     const pieSvg = `<svg id="pie-test" class="pie mermaid">
       <path class="pieCircle" d="M0,0"/>
+      <path class="pieCircle" d="M1,1"/>
+      <g class="legend"><rect x="0" y="0"/></g>
       <text class="slice">42%</text>
       <text class="slice">24%</text>
       <text class="pieTitleText">Cloud Budget</text>
@@ -116,7 +118,7 @@ describe('Six User Defect Fixes Verification', () => {
 
     const styled = styleSvg(pieSvg, '', DEFAULT_SETTINGS, palette, true);
     const d = new JSDOM(styled).window.document;
-    const slices = Array.from(d.querySelectorAll('.slice'));
+    const slices = Array.from(d.querySelectorAll('text.slice'));
     assert.equal(slices.length, 2);
     for (const s of slices as any[]) {
       assert.equal(s.getAttribute('fill'), '#ffffff', 'Inner slice percentage must be white #ffffff');
@@ -125,6 +127,13 @@ describe('Six User Defect Fixes Verification', () => {
         'Fill style should be white'
       );
     }
+
+    const paths = Array.from(d.querySelectorAll('path.pieCircle')) as Element[];
+    assert.equal(paths[0]!.getAttribute('fill'), palette.fills[0], 'First slice must match palette.fills[0]');
+    assert.equal(paths[1]!.getAttribute('fill'), palette.fills[1], 'Second slice must match palette.fills[1]');
+
+    const legendRect = d.querySelector('.legend rect') as Element;
+    assert.equal(legendRect.getAttribute('fill'), palette.fills[0], 'Legend rect must match palette.fills[0]');
   });
 
   // 4. Git Graph redesign (D13)
@@ -143,25 +152,25 @@ describe('Six User Defect Fixes Verification', () => {
     const d = new JSDOM(styled).window.document;
 
     const b0 = d.querySelector('line.branch0');
-    assert.equal(b0.getAttribute('stroke'), palette.fills[0]);
+    assert.equal(b0.getAttribute('stroke'), palette.borders[0]);
     const b1 = d.querySelector('line.branch1');
-    assert.equal(b1.getAttribute('stroke'), palette.fills[1]);
+    assert.equal(b1.getAttribute('stroke'), palette.borders[1]);
 
     const btext = d.querySelector('.branch-label0 text');
     assert.equal(btext.getAttribute('fill'), '#ffffff');
 
     const commitCircle = d.querySelector('circle.commit0');
-    assert.equal(commitCircle.getAttribute('fill'), palette.fills[0]);
+    assert.equal(commitCircle.getAttribute('fill'), palette.borders[0]);
     assert.equal(commitCircle.getAttribute('stroke'), '#ffffff');
 
     const commitBkg = d.querySelector('rect.commit-label-bkg');
-    assert.equal(commitBkg.getAttribute('fill'), '#1e293b');
+    assert.equal(commitBkg.getAttribute('fill'), '#222e3e');
     const commitText = d.querySelector('text.commit-label');
     assert.equal(commitText.getAttribute('fill'), '#ffffff');
   });
 
-  // 5. Cynefin Framework centering (D30)
-  it('5. Cynefin Framework: ensures quadrant titles and items are centered with direction TB', () => {
+  // 5. Cynefin Framework centering vs Kanban / Architecture left-alignment
+  it('5. Cynefin Framework: ensures quadrant titles and items are centered while Kanban and Arch remain start-aligned', () => {
     const cynefinCode = `cynefin-beta
     title Engineering Problem Domains
     complex
@@ -173,12 +182,44 @@ describe('Six User Defect Fixes Verification', () => {
     assert.ok(transpiled.includes('subgraph Complex ["🌀 Complex<br/><i>Probe · Sense · Respond</i>"]\n                direction TB'));
     assert.ok(transpiled.includes('subgraph Clear ["✅ Clear<br/><i>Sense · Categorize · Respond</i>"]\n                direction TB'));
 
-    // Check cluster label centering in styleSvg
-    const testSvg = `<svg class="mermaid"><g class="cluster-label"><text>Cynefin Framework</text></g></svg>`;
-    const styled = styleSvg(testSvg, '', DEFAULT_SETTINGS, palette, true);
-    const d = new JSDOM(styled).window.document;
-    const clText = d.querySelector('.cluster-label text');
-    assert.equal(clText.getAttribute('text-anchor'), 'middle', 'Cluster text must be centered with middle anchor');
+    // Check Cynefin-scoped cluster label centering in styleSvg
+    const cynefinSvg = `<svg class="mermaid"><g id="Cynefin-Complex" class="cluster-label"><text>Complex</text></g></svg>`;
+    const styledCynefin = styleSvg(cynefinSvg, '', DEFAULT_SETTINGS, palette, true);
+    const dCynefin = new JSDOM(styledCynefin).window.document;
+    const clText = dCynefin.querySelector('.cluster-label text');
+    assert.equal(clText.getAttribute('text-anchor'), 'middle', 'Cynefin cluster text must be centered with middle anchor');
+
+    // Check Kanban column header remains start-aligned
+    const kanbanCode = `kanban
+      backlog[📋 Ready for Planning]
+        task1[Explore WebGL GPU acceleration]`;
+    const kanbanSvg = renderWithPele({
+      text: kanbanCode,
+      id: 'kanban-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    const styledKanban = styleSvg(kanbanSvg, '', DEFAULT_SETTINGS, palette, true);
+    const dKanban = new JSDOM(styledKanban).window.document;
+    const kLabel = dKanban.querySelector('.pele-cluster-label');
+    assert.equal(kLabel.getAttribute('text-anchor'), 'start', 'Kanban column title must remain start-aligned');
+
+    // Check Architecture Diagram cluster title remains start-aligned
+    const archCode = `architecture-beta
+      group cloud(cloud)[AWS Infrastructure]
+      service alb(internet)[Application Load Balancer] in cloud`;
+    const archSvg = renderWithPele({
+      text: archCode,
+      id: 'arch-test',
+      settings: DEFAULT_SETTINGS,
+      palette,
+      dark: true,
+    });
+    const styledArch = styleSvg(archSvg, '', DEFAULT_SETTINGS, palette, true);
+    const dArch = new JSDOM(styledArch).window.document;
+    const archLabel = dArch.querySelector('.pele-cluster-label');
+    assert.equal(archLabel.getAttribute('text-anchor'), 'start', 'Architecture cluster title must remain start-aligned');
   });
 
   // 6. AgentFlow Colorization (D33)

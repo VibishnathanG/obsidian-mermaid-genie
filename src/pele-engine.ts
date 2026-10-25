@@ -489,10 +489,14 @@ export function enhancePeleSvg(
         }
       }
 
-      for (const title of Array.from(col.querySelectorAll('.pele-cluster-label'))) {
+      for (const title of Array.from(col.querySelectorAll('.pele-cluster-label, text.pele-cluster-label'))) {
         title.setAttribute('fill', palette.text);
         title.setAttribute('text-anchor', 'start');
         title.setAttribute('font-weight', 'bold');
+        if ((title as HTMLElement).style) {
+          (title as HTMLElement).style.setProperty('text-anchor', 'start', 'important');
+          (title as HTMLElement).style.setProperty('text-align', 'left', 'important');
+        }
       }
 
       for (const count of Array.from(col.querySelectorAll('.pele-count'))) {
@@ -738,11 +742,16 @@ export function enhancePeleSvg(
         }
       }
 
-      const label = cluster.querySelector('.pele-cluster-label');
+      const label = cluster.querySelector('.pele-cluster-label, text.pele-cluster-label');
       if (label) {
         label.setAttribute('fill', palette.text);
+        label.setAttribute('text-anchor', 'start');
         setElStyle(label, 'fill', palette.text, true);
         setElStyle(label, 'font-weight', 'bold');
+        if ((label as HTMLElement).style) {
+          (label as HTMLElement).style.setProperty('text-anchor', 'start', 'important');
+          (label as HTMLElement).style.setProperty('text-align', 'left', 'important');
+        }
       }
 
       const icon = cluster.querySelector('svg.pele-icon path');

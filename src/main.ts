@@ -298,17 +298,15 @@ export default class MermaidGeniePlugin extends Plugin {
           pieLegendTextColor: palette.text,
           pieStrokeColor: palette.border,
 
-          // Git graphs
-          ...(palette.fills.length >= 6 ? {
-            git0: palette.fills[0],
-            git1: palette.fills[1],
-            git2: palette.fills[2],
-            git3: palette.fills[3],
-            git4: palette.fills[4],
-            git5: palette.fills[5],
-            git6: palette.fills[0],
-            git7: palette.fills[1],
-          } : {}),
+          // Git graphs: vibrant, high-visibility branch colors in dark and light modes
+          git0: dark ? (palette.borders[0] ?? '#38bdf8') : (palette.borders[0] ?? '#2563eb'),
+          git1: dark ? (palette.borders[1] ?? '#34d399') : (palette.borders[1] ?? '#059669'),
+          git2: dark ? (palette.borders[2] ?? '#fbbf24') : (palette.borders[2] ?? '#d97706'),
+          git3: dark ? (palette.borders[3] ?? '#a78bfa') : (palette.borders[3] ?? '#7c3aed'),
+          git4: dark ? (palette.borders[4] ?? '#22d3ee') : (palette.borders[4] ?? '#0891b2'),
+          git5: dark ? (palette.borders[5] ?? '#f472b6') : (palette.borders[5] ?? '#db2777'),
+          git6: dark ? (palette.borders[0] ?? '#38bdf8') : (palette.borders[0] ?? '#2563eb'),
+          git7: dark ? (palette.borders[1] ?? '#34d399') : (palette.borders[1] ?? '#059669'),
           gitBranchLabel0: '#ffffff',
           gitBranchLabel1: '#ffffff',
           gitBranchLabel2: '#ffffff',

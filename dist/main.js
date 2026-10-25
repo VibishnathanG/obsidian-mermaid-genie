@@ -2437,11 +2437,14 @@ function fixKanbanDiagram(doc, palette, dark) {
       rect.setAttribute("rx", "8");
       rect.setAttribute("ry", "8");
     }
-    for (const title of col.querySelectorAll(".cluster-label, .kanban-label, .cluster-label .nodeLabel, .cluster-label p, .cluster-label span")) {
+    for (const title of col.querySelectorAll(".cluster-label, .kanban-label, .cluster-label text, text.pele-cluster-label, .cluster-label .nodeLabel, .cluster-label p, .cluster-label span")) {
       title.setAttribute("fill", palette.text);
+      title.setAttribute("text-anchor", "start");
       if (title.style) {
         title.style.setProperty("color", palette.text, "important");
         title.style.setProperty("fill", palette.text, "important");
+        title.style.setProperty("text-anchor", "start", "important");
+        title.style.setProperty("text-align", "left", "important");
         title.style.fontWeight = "700";
         title.style.fontSize = "14px";
       }
@@ -2588,13 +2591,39 @@ function fixPacketDiagram(doc, palette, _dark) {
 }
 function fixPieChart(doc, palette, dark) {
   const root = doc.documentElement;
-  const isPie = root.classList.contains("pie") || !!doc.querySelector(".pieCircle, .pieTitleText, .slice");
+  const isPie = root.classList.contains("pie") || !!doc.querySelector(".pieCircle, .pieTitleText, .slice, .legend-item, g.slices");
   if (!isPie) return;
-  for (const t of doc.querySelectorAll(".pieTitleText, text.pieTitleText")) {
+  for (const t of doc.querySelectorAll(".pieTitleText, text.pieTitleText, .pele-pie .pele-title")) {
     t.setAttribute("fill", palette.text);
     if (t.style) t.style.setProperty("fill", palette.text, "important");
   }
-  for (const s of doc.querySelectorAll('.slice, text.slice, .pieCircleText, [class*="slice"]')) {
+  const fills = palette.fills.length > 0 ? palette.fills : ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"];
+  const borders = palette.borders.length > 0 ? palette.borders : fills;
+  const slices = Array.from(doc.querySelectorAll("path.pieCircle, g.slices path, path.pele-slice"));
+  for (let idx = 0; idx < slices.length; idx++) {
+    const s = slices[idx];
+    const sliceFill = fills[idx % fills.length];
+    const sliceStroke = borders[idx % borders.length];
+    s.setAttribute("fill", sliceFill);
+    s.setAttribute("stroke", sliceStroke);
+    if (s.style) {
+      s.style.setProperty("fill", sliceFill, "important");
+      s.style.setProperty("stroke", sliceStroke, "important");
+    }
+  }
+  const legendRects = Array.from(doc.querySelectorAll(".legend rect, g.legend rect, .legend-item rect, .pele-legend-item rect"));
+  for (let idx = 0; idx < legendRects.length; idx++) {
+    const r = legendRects[idx];
+    const rectFill = fills[idx % fills.length];
+    const rectStroke = borders[idx % borders.length];
+    r.setAttribute("fill", rectFill);
+    r.setAttribute("stroke", rectStroke);
+    if (r.style) {
+      r.style.setProperty("fill", rectFill, "important");
+      r.style.setProperty("stroke", rectStroke, "important");
+    }
+  }
+  for (const s of doc.querySelectorAll('text.slice, text.pieCircleText, .pieCircleText text, text[class*="slice"], .pele-slice-labels text')) {
     s.setAttribute("fill", "#ffffff");
     s.setAttribute("style", "fill: #ffffff !important; color: #ffffff !important; font-weight: 600 !important;");
     if (s.style) {
@@ -2603,7 +2632,7 @@ function fixPieChart(doc, palette, dark) {
       s.style.setProperty("font-weight", "600", "important");
     }
   }
-  for (const l of doc.querySelectorAll(".legend text, g.legend text")) {
+  for (const l of doc.querySelectorAll(".legend text, g.legend text, .legend-item text, .pele-legend-item text")) {
     l.setAttribute("fill", palette.text);
     if (l.style) l.style.setProperty("fill", palette.text, "important");
   }
@@ -2612,11 +2641,10 @@ function fixGitGraph(doc, palette, dark) {
   const root = doc.documentElement;
   const isGit = root.classList.contains("gitGraph") || !!doc.querySelector('.commit-bullets, .branchLabel, .commit-label, line.branch, [class*="branch0"]');
   if (!isGit) return;
-  const fills = palette.fills.length > 0 ? palette.fills : ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899"];
-  const borders = palette.borders.length > 0 ? palette.borders : fills;
+  const branchColors = dark ? palette.borders.length >= 6 ? palette.borders : ["#38bdf8", "#34d399", "#fbbf24", "#a78bfa", "#22d3ee", "#f472b6"] : palette.borders.length >= 6 ? palette.borders : ["#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777"];
   for (let b = 0; b < 10; b++) {
-    const branchColor = fills[b % fills.length];
-    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}`)) {
+    const branchColor = branchColors[b % branchColors.length];
+    for (const line of doc.querySelectorAll(`line.branch.branch${b}, line.branch${b}, path.branch.branch${b}, path.branch${b}`)) {
       line.setAttribute("stroke", branchColor);
       line.setAttribute("stroke-width", "2.5px");
       line.setAttribute("stroke-dasharray", "none");
@@ -2625,7 +2653,7 @@ function fixGitGraph(doc, palette, dark) {
         line.style.setProperty("stroke-width", "2.5px", "important");
       }
     }
-    for (const arrow of doc.querySelectorAll(`.arrow${b}, path.arrow${b}`)) {
+    for (const arrow of doc.querySelectorAll(`.arrow${b}, path.arrow${b}, path[class*="arrow${b}"]`)) {
       arrow.setAttribute("stroke", branchColor);
       arrow.setAttribute("fill", "none");
       if (arrow.style) {
@@ -2634,12 +2662,12 @@ function fixGitGraph(doc, palette, dark) {
     }
     for (const bkg of doc.querySelectorAll(`rect.branchLabelBkg.label${b}, rect.label${b}`)) {
       bkg.setAttribute("fill", branchColor);
-      bkg.setAttribute("stroke", borders[b % borders.length]);
+      bkg.setAttribute("stroke", branchColor);
       bkg.setAttribute("rx", "5");
       bkg.setAttribute("ry", "5");
       if (bkg.style) {
         bkg.style.setProperty("fill", branchColor, "important");
-        bkg.style.setProperty("stroke", borders[b % borders.length], "important");
+        bkg.style.setProperty("stroke", branchColor, "important");
       }
     }
     for (const btext of doc.querySelectorAll(`.branch-label${b} text, .branch-label${b}`)) {
@@ -2652,37 +2680,39 @@ function fixGitGraph(doc, palette, dark) {
     }
     for (const circle of doc.querySelectorAll(`circle.commit.commit${b}, circle.commit${b}`)) {
       circle.setAttribute("fill", branchColor);
-      circle.setAttribute("stroke", "#ffffff");
+      circle.setAttribute("stroke", dark ? "#ffffff" : "#0f172a");
       circle.setAttribute("stroke-width", "2px");
       circle.setAttribute("r", "5.5");
       if (circle.style) {
         circle.style.setProperty("fill", branchColor, "important");
-        circle.style.setProperty("stroke", "#ffffff", "important");
+        circle.style.setProperty("stroke", dark ? "#ffffff" : "#0f172a", "important");
         circle.style.setProperty("stroke-width", "2px", "important");
       }
     }
   }
   for (const bkg of doc.querySelectorAll("rect.commit-label-bkg")) {
-    const bkgFill = dark ? "#1e293b" : "#0f172a";
+    const bkgFill = dark ? "#222e3e" : "#ffffff";
+    const bkgStroke = dark ? "#64748b" : "#94a3b8";
     bkg.setAttribute("fill", bkgFill);
-    bkg.setAttribute("stroke", "#475569");
-    bkg.setAttribute("stroke-width", "1px");
+    bkg.setAttribute("stroke", bkgStroke);
+    bkg.setAttribute("stroke-width", "1.25px");
     bkg.setAttribute("rx", "4");
     bkg.setAttribute("ry", "4");
-    bkg.setAttribute("opacity", "0.94");
+    bkg.setAttribute("opacity", "0.96");
     if (bkg.style) {
       bkg.style.setProperty("fill", bkgFill, "important");
-      bkg.style.setProperty("stroke", "#475569", "important");
-      bkg.style.setProperty("opacity", "0.94", "important");
+      bkg.style.setProperty("stroke", bkgStroke, "important");
+      bkg.style.setProperty("opacity", "0.96", "important");
     }
   }
   for (const text of doc.querySelectorAll("text.commit-label, .commit-label text")) {
-    text.setAttribute("fill", "#ffffff");
+    const textColor = dark ? "#ffffff" : "#0f172a";
+    text.setAttribute("fill", textColor);
     if (text.style) {
-      text.style.setProperty("fill", "#ffffff", "important");
-      text.style.setProperty("color", "#ffffff", "important");
+      text.style.setProperty("fill", textColor, "important");
+      text.style.setProperty("color", textColor, "important");
       text.style.setProperty("font-weight", "600", "important");
-      text.style.setProperty("font-size", "12px", "important");
+      text.style.setProperty("font-size", "12.5px", "important");
     }
   }
   for (const tagBkg of doc.querySelectorAll("polygon.tag-label-bkg, rect.tag-label-bkg, path.tag-label-bkg")) {
@@ -3162,7 +3192,7 @@ function styleSvg(svg, direction, settings, palette, dark) {
   fixPacketDiagram(doc, palette, dark);
   fixPieChart(doc, palette, dark);
   fixGitGraph(doc, palette, dark);
-  for (const cl2 of doc.querySelectorAll(".cluster-label text, text.pele-cluster-label, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel")) {
+  for (const cl2 of doc.querySelectorAll(':is([id*="Cynefin" i], [id*="Complex" i], [id*="Complicated" i], [id*="Chaotic" i], [id*="Clear" i], [id*="Disorder" i], g[data-id="Cynefin"], g[data-id="Complex"], g[data-id="Complicated"], g[data-id="Chaotic"], g[data-id="Clear"]) :is(.cluster-label text, .cluster-label span, .cluster-label div, .cluster-label .nodeLabel, text.pele-cluster-label)')) {
     cl2.setAttribute("text-anchor", "middle");
     if (cl2.style) {
       cl2.style.setProperty("text-anchor", "middle", "important");
@@ -24757,10 +24787,14 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
           rect.style.stroke = colBorder;
         }
       }
-      for (const title of Array.from(col.querySelectorAll(".pele-cluster-label"))) {
+      for (const title of Array.from(col.querySelectorAll(".pele-cluster-label, text.pele-cluster-label"))) {
         title.setAttribute("fill", palette.text);
         title.setAttribute("text-anchor", "start");
         title.setAttribute("font-weight", "bold");
+        if (title.style) {
+          title.style.setProperty("text-anchor", "start", "important");
+          title.style.setProperty("text-align", "left", "important");
+        }
       }
       for (const count of Array.from(col.querySelectorAll(".pele-count"))) {
         count.setAttribute("fill", dark ? "#94a3b8" : "#64748b");
@@ -24974,11 +25008,16 @@ function enhancePeleSvg(svgString, id2, settings, palette, dark) {
           rect.style.stroke = clusterBorder;
         }
       }
-      const label = cluster.querySelector(".pele-cluster-label");
+      const label = cluster.querySelector(".pele-cluster-label, text.pele-cluster-label");
       if (label) {
         label.setAttribute("fill", palette.text);
+        label.setAttribute("text-anchor", "start");
         setElStyle(label, "fill", palette.text, true);
         setElStyle(label, "font-weight", "bold");
+        if (label.style) {
+          label.style.setProperty("text-anchor", "start", "important");
+          label.style.setProperty("text-align", "left", "important");
+        }
       }
       const icon = cluster.querySelector("svg.pele-icon path");
       if (icon) {
@@ -26178,17 +26217,15 @@ var MermaidGeniePlugin = class extends import_obsidian6.Plugin {
           pieSectionTextColor: "#ffffff",
           pieLegendTextColor: palette.text,
           pieStrokeColor: palette.border,
-          // Git graphs
-          ...palette.fills.length >= 6 ? {
-            git0: palette.fills[0],
-            git1: palette.fills[1],
-            git2: palette.fills[2],
-            git3: palette.fills[3],
-            git4: palette.fills[4],
-            git5: palette.fills[5],
-            git6: palette.fills[0],
-            git7: palette.fills[1]
-          } : {},
+          // Git graphs: vibrant, high-visibility branch colors in dark and light modes
+          git0: dark ? palette.borders[0] ?? "#38bdf8" : palette.borders[0] ?? "#2563eb",
+          git1: dark ? palette.borders[1] ?? "#34d399" : palette.borders[1] ?? "#059669",
+          git2: dark ? palette.borders[2] ?? "#fbbf24" : palette.borders[2] ?? "#d97706",
+          git3: dark ? palette.borders[3] ?? "#a78bfa" : palette.borders[3] ?? "#7c3aed",
+          git4: dark ? palette.borders[4] ?? "#22d3ee" : palette.borders[4] ?? "#0891b2",
+          git5: dark ? palette.borders[5] ?? "#f472b6" : palette.borders[5] ?? "#db2777",
+          git6: dark ? palette.borders[0] ?? "#38bdf8" : palette.borders[0] ?? "#2563eb",
+          git7: dark ? palette.borders[1] ?? "#34d399" : palette.borders[1] ?? "#059669",
           gitBranchLabel0: "#ffffff",
           gitBranchLabel1: "#ffffff",
           gitBranchLabel2: "#ffffff",
