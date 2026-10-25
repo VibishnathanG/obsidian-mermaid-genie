@@ -1,7 +1,7 @@
 # Obsidian Mermaid Genie
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-70%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-83%20passed-brightgreen.svg)]()
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-purple.svg)](https://obsidian.md)
 [![Pele Compiler](https://img.shields.io/badge/Compiler-Pele%20Ultra--Fast-blueviolet.svg)]()
 
@@ -16,10 +16,10 @@ Developed and maintained by **Vibish** ([@VibishnathanG](https://github.com/Vibi
 - [Core Capabilities](#Core-Capabilities)
 - [Dual Engine Architecture](#Dual-Engine-Architecture)
 - [Specialized Diagram Cosmetics](#Specialized-Diagram-Cosmetics)
-- [Future Pele Upgrades](#Future-Pele-Upgrades)
+- [Future Pele Upgrades Guide](#Future-Pele-Upgrades)
+- [Installing in Another Obsidian Vault](#Installing-in-Another-Obsidian-Vault)
 - [Palettes and Theming](#Palettes-and-Theming)
 - [Interactive Controls & Export](#Interactive-Controls-and-Export)
-- [Installation](#Installation)
 - [Configuration](#Configuration)
 - [Development and Testing](#Development-and-Testing)
 - [License](#License)
@@ -127,102 +127,159 @@ Mermaid Genie provides dedicated cosmetic post-processing for the following diag
 
 ## Future-Pele-Upgrades
 
-When upgrading Pele in the future, follow this streamlined checklist:
+Pele is Obsidian's official zero-dependency, pure JavaScript/Wasm synchronous compiler. It compiles Mermaid diagrams in `<1ms` without the asynchronous Dagre web-worker overhead of classic Mermaid.js.
 
-### Step 1: Update the Package
+Mermaid Genie deeply integrates with Pele by:
+- Binding Genie's active theme palette directly to Pele's native CSS variables (`--pele-bg`, `--pele-fg`, `--pele-line`, `--pele-surface`, `--pele-surface-alt`, `--pele-border`, `--pele-accent`, and `--pele-series-1` through `--pele-series-12`).
+- Injecting ancestor path tracing metadata (`data-mpe-key`, `data-mpe-from`, `data-mpe-to`) and zoom/export overlay controls.
+- Providing specialized cosmetic enhancements for Pele-rendered diagrams (`isPeleFlowchart`, `isPeleClass`, `isPeleEr`, `isPeleGantt`, `isPeleKanban`, `isPeleSeq`, `isPeleState`, `isPeleTreemap`, `isPelePacket`, `isPeleBlock`, `isPeleC4`, `isPeleArch`, `isPeleTimeline`, `isPeleJourney`, `isPeleGit`, `isPeleWardley`, `isPeleCynefin`, and `isPeleMindmap`).
+- Ensuring a **zero-disruption fallback**: if Pele encounters an unsupported diagram or syntax error, `renderWithPele()` safely catches the exception and returns `null`, seamlessly triggering Mermaid.js v12+.
+
+When a new version of Pele is released in the future, follow this streamlined upgrade and verification workflow:
+
+### S1-Check-and-Install-New-Version
+Check for new releases and install the latest Pele package:
 ```bash
+# Check installed vs latest version
+npm outdated pele
+
+# Upgrade to latest
 npm install pele@latest
 ```
 
-### Step 2: Verify Key Integration Files
-- [`src/pele-engine.ts`](src/pele-engine.ts): Check the `peleRender(text, options)` call signature and verify that `--pele-*` CSS variables are intact.
-- [`src/main.ts`](src/main.ts): Verify that `renderWithPele` wraps output in a `RenderResult` object `{ svg: peleSvg, bindFunctions: () => {} }` with `.toString()`.
-- [`esbuild.config.mts`](esbuild.config.mts): Ensure `pele` is bundled into the output (not marked as external).
+### S2-Inspect-Pele-API-and-AST-Changes
+Review changes in Pele's API and rendered SVG output:
+1. **Render Options Signature** in [`src/pele-engine.ts`](src/pele-engine.ts):
+   Verify the `render(text, options)` call signature:
+   ```ts
+   const result = peleRender(text, {
+     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif',
+     fontSize: 14,
+     idPrefix: id ? `${id}-` : undefined,
+     measurer: {
+       width(str: string, size: number) {
+         return str.length * (size * 0.65) * 1.25;
+       },
+     },
+   });
+   ```
+2. **CSS Variable Mapping**:
+   Confirm Pele continues to use `--pele-*` custom properties on the root `<svg>` (`--pele-bg`, `--pele-fg`, `--pele-line`, `--pele-surface`, `--pele-series-N`).
+3. **Selector Scoping Isolation**:
+   When new diagram classes are introduced, ensure selectors in [`styles.css`](styles.css) and [`src/layout.ts`](src/layout.ts) remain properly scoped. For example, ensure GitGraph branch selectors (`.pele-gitGraph .pele-branch text`) remain scoped so they do not unintentionally target mindmap branches (`.pele-mindmap .pele-branch`).
+4. **Bundler Configuration**:
+   Ensure [`esbuild.config.mts`](esbuild.config.mts) bundles `pele` directly into `main.js` (do **not** mark `pele` as external).
 
-### Step 3: Run the Verification Suite
+### S3-Run-the-Comprehensive-Test-Suite
+Execute the full test suite to verify syntax compatibility, cosmetic accuracy, and fallback resilience:
 ```bash
-# Typecheck
+# 1. Typecheck TypeScript sources
 npm run typecheck
 
-# Pele and gallery tests
+# 2. Verify Pele engine rendering & cosmetics
 npx tsx --test tests/pele-engine.test.ts
+
+# 3. Verify all 33 gallery diagrams against Pele
 npx tsx --test tests/gallery-verify.test.ts
 
-# Full test suite (70 tests)
+# 4. Verify cosmetic fixes (Mindmaps, GitGraph, Treemap, Arch, Cynefin, etc.)
+npx tsx --test tests/cosmetic-fixes-verification.test.ts
+
+# 5. Run all 83 automated tests across 11 test suites
 npm test
 ```
 
-### Step 4: Build and Deploy
+### S4-Build-and-Verify-in-Obsidian
+Build the production bundle and verify the upgrade in live Obsidian notes:
 ```bash
 npm run build
 ```
-Esbuild compiles `main.js` and automatically syncs the bundle directly into your active Obsidian vault.
+1. Open the [Mermaid Syntax Gallery](mermaid-syntax-gallery.md) in Obsidian to inspect all 33 diagram types.
+2. In Obsidian **Settings → Mermaid Genie**, verify that toggling between `pele` and `mermaid` render engines operates seamlessly with instantaneous re-rendering.
 
 ---
 
-## Palettes-and-Theming
+## Installing-in-Another-Obsidian-Vault
 
-### Multi-Color-Coordinated-Palettes
+Mermaid Genie is fully self-contained. To run the plugin in another vault or on another computer, you only need **three runtime files**:
 
-| Palette Name | Description | Tones Included | Reference Note |
+| File | Purpose | Location in Repository | Reference Note |
 | :--- | :--- | :--- | :--- |
-| **Clear** | Balanced, fresh, and modern | Blue, Teal, Amber, Violet, Cyan, Rose | |
-| **Cool** | High-tech and focused | Indigo, Cyan, Violet, Sky, Ocean, Slate | |
-| **Natural** | Warm and organic | Sage, Ochre, Terracotta, Olive, Stone, Clay | |
+| `main.js` | Compiled JavaScript runtime containing Pele & Mermaid.js | `dist/main.js` or `main.js` | |
+| `manifest.json` | Obsidian plugin descriptor (`id: "mermaid-genie"`, version, minAppVersion) | `manifest.json` | |
+| `styles.css` | Plugin stylesheet for palettes, high-contrast typography, and overlays | `dist/styles.css` or `styles.css` | |
 
-### Single-Hue-Presets
+### Method-1-Direct-Copy-to-Another-Vault
+This method works on any desktop computer running Obsidian (Windows, macOS, or Linux):
 
-| Preset Name | Light Mode | Dark Mode | Reference Note |
+1. **Locate your target Obsidian vault folder** on your file system (e.g., `Documents/MySecondVault/`).
+2. **Open the hidden `.obsidian/plugins/` directory**:
+   - Inside your vault root, open the `.obsidian` folder, then open `plugins`.
+   - *Tip: If `.obsidian` is hidden, press `Ctrl + H` (Linux), `Cmd + Shift + .` (macOS), or check **View → Hidden items** in Windows Explorer.*
+3. **Create a plugin folder**:
+   - Create a new directory named `mermaid-genie` (or `mermaid-genie-local`).
+4. **Copy the runtime files**:
+   - Copy `dist/main.js`, `manifest.json`, and `dist/styles.css` into `.obsidian/plugins/mermaid-genie/`.
+5. **Enable the plugin in Obsidian**:
+   - Open Obsidian and your target vault.
+   - Go to **Settings (`Ctrl+,` or `Cmd+,`) → Community plugins**.
+   - If **Restricted mode** is on, click **Turn on community plugins**.
+   - Under **Installed plugins**, click the **Reload plugins** button (circular refresh icon).
+   - Find **Mermaid Genie** in the list and toggle the switch to **ON**.
+
+#### Fast One-Line Terminal Commands
+
+- **Linux / macOS / WSL**:
+  ```bash
+  TARGET_VAULT="/path/to/YourVault"
+  mkdir -p "$TARGET_VAULT/.obsidian/plugins/mermaid-genie"
+  cp dist/main.js manifest.json dist/styles.css "$TARGET_VAULT/.obsidian/plugins/mermaid-genie/"
+  ```
+
+- **Windows PowerShell**:
+  ```powershell
+  $VaultPluginDir = "C:\Users\YourUser\Documents\YourVault\.obsidian\plugins\mermaid-genie"
+  New-Item -ItemType Directory -Force -Path $VaultPluginDir
+  Copy-Item "dist\main.js", "manifest.json", "dist\styles.css" -Destination $VaultPluginDir
+  ```
+
+### Method-2-Automated-Multi-Vault-Build-Sync
+If you actively work with multiple Obsidian vaults on the same development machine, configure [`esbuild.config.mts`](esbuild.config.mts) to automatically sync builds to all of them at once:
+
+1. Open [`esbuild.config.mts`](esbuild.config.mts).
+2. Configure your vault destinations:
+   ```ts
+   const VAULT_DIRS = [
+     "/mnt/c/Users/YourUser/Documents/FirstVault/.obsidian/plugins/mermaid-genie-local",
+     "/mnt/c/Users/YourUser/Documents/SecondVault/.obsidian/plugins/mermaid-genie",
+   ];
+   ```
+3. Run the build command:
+   ```bash
+   npm run build
+   ```
+   Esbuild compiles the bundle once and automatically copies `main.js`, `manifest.json`, and `styles.css` into every specified vault simultaneously.
+
+### Method-3-Distributable-ZIP-Release
+To share Mermaid Genie with teammates or archive releases:
+
+1. Run `npm run build` to compile the latest code.
+2. Package the three runtime files:
+   ```bash
+   zip -j mermaid-genie-v1.0.0.zip dist/main.js manifest.json dist/styles.css
+   ```
+3. To install from the ZIP on another machine:
+   - Extract `mermaid-genie-v1.0.0.zip` into `<VaultFolder>/.obsidian/plugins/mermaid-genie/`.
+   - Reload plugins in Obsidian settings and toggle **Mermaid Genie** on.
+
+### Installation-Verification-and-Troubleshooting
+
+| Issue / Symptom | Possible Cause | Solution | Reference Note |
 | :--- | :--- | :--- | :--- |
-| **Slate** | Clean Slate Gray | Deep Slate Blue | |
-| **Mint** | Mint Green Accent | Emerald Green Surface | |
-| **Sky** | Radiant Sky Blue | Navy Night Blue | |
-| **Rose** | Subtle Rose Quartz | Deep Berry Tint | |
-
----
-
-## Interactive-Controls-and-Export
-
-Each diagram block is equipped with a non-intrusive floating action overlay:
-- **Zoom In / Out / Reset**: Adjusts diagram zoom scale between 0.3x and 3.0x.
-- **Fullscreen Modal**: Opens an isolated, distraction-free modal viewer with pan and zoom.
-- **Copy SVG**: Copies the sanitized, standalone vector graphic directly to clipboard.
-- **Copy PNG**: Renders a high-resolution 2x DPI raster image to clipboard.
-- **Save to Vault**: Saves the diagram image directly to your configured vault attachment folder.
-
-### Diagram-Level Opt-Out
-To disable Genie enhancements on a specific diagram, add `%% mg:off` or `%% mfe:off` anywhere inside the Mermaid block:
-
-```mermaid
-%% mg:off
-flowchart TD
-  A[Native Node] --> B[Native Node]
-```
-
----
-
-## Installation
-
-### Method 1: Local Vault Sync (Development)
-The repository build script automatically syncs compiled builds directly to:
-```text
-/mnt/c/Users/vibis/OneDrive/Documents/Obsidian Vault/.obsidian/plugins/mermaid-genie-local/
-```
-Simply run:
-```bash
-npm run build
-```
-Then reload Obsidian (`Ctrl + R` / `Cmd + R` or **Community plugins → Reload**).
-
-### Method 2: Manual Installation
-1. Copy the following files from [`dist/`](dist/):
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-   - `README.md`
-2. In your Obsidian vault, create a folder at `.obsidian/plugins/mermaid-genie/`.
-3. Paste the files inside that folder.
-4. In Obsidian, navigate to **Settings → Community plugins**, click **Reload plugins**, and toggle **Mermaid Genie** on.
+| **Plugin does not appear in Community Plugins list** | Files copied to root `.obsidian/` instead of `.obsidian/plugins/mermaid-genie/` | Verify that `main.js` and `manifest.json` are inside `.obsidian/plugins/mermaid-genie/`. | |
+| **"Failed to load plugin" error** | Missing `manifest.json` or corrupted `main.js` | Ensure `manifest.json` is present and was copied alongside `main.js`. | |
+| **Diagrams render without colors or overlays** | Missing `styles.css` | Verify `styles.css` was copied into the plugin folder. | |
+| **Changes not reflecting after update** | Obsidian cached the previous plugin build | Press `Ctrl + R` / `Cmd + R` inside Obsidian to reload the window, or toggle the plugin off and on. | |
 
 ---
 
@@ -256,7 +313,7 @@ For full details on each configuration property, refer to [DATA_OPTIONS.md](DATA
 # Install dependencies
 npm install
 
-# Run the complete automated test suite (70 tests)
+# Run the complete automated test suite (83 tests across 11 test suites)
 npm test
 
 # Run TypeScript typecheck
